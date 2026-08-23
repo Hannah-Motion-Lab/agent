@@ -1,0 +1,25 @@
+{
+  "$schema": "https://v2-8-13.turborepo.dev/schema.json",
+  "globalEnv": ["CI", "HANNAH_AGENT_DISABLE_SHARE"],
+  "globalPassThroughEnv": ["CI", "HANNAH_AGENT_DISABLE_SHARE"],
+  "tasks": {
+    "typecheck": {},
+    "build": {
+      "dependsOn": [],
+      "outputs": ["dist/**"]
+    },
+    "hannah-agent#test": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "passThroughEnv": ["*"]
+    },
+    "@hannah/core#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "@hannah/ui#test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    }
+  }
+}

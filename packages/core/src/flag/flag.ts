@@ -1,0 +1,78 @@
+import { Config } from "effect"
+
+export function truthy(key: string) {
+  const value = process.env[key]?.toLowerCase()
+  return value === "true" || value === "1"
+}
+
+const copy = process.env["HANNAH_AGENT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
+const fff = process.env["HANNAH_AGENT_DISABLE_FFF"]
+
+function enabledByExperimental(key: string) {
+  return process.env[key] === undefined ? truthy("HANNAH_AGENT_EXPERIMENTAL") : truthy(key)
+}
+
+export const Flag = {
+  OTEL_EXPORTER_OTLP_ENDPOINT: process.env["OTEL_EXPORTER_OTLP_ENDPOINT"],
+  OTEL_EXPORTER_OTLP_HEADERS: process.env["OTEL_EXPORTER_OTLP_HEADERS"],
+
+  HANNAH_AGENT_AUTO_HEAP_SNAPSHOT: truthy("HANNAH_AGENT_AUTO_HEAP_SNAPSHOT"),
+  HANNAH_AGENT_GIT_BASH_PATH: process.env["HANNAH_AGENT_GIT_BASH_PATH"],
+  HANNAH_AGENT_CONFIG: process.env["HANNAH_AGENT_CONFIG"],
+  HANNAH_AGENT_CONFIG_CONTENT: process.env["HANNAH_AGENT_CONFIG_CONTENT"],
+  HANNAH_AGENT_DISABLE_AUTOUPDATE: truthy("HANNAH_AGENT_DISABLE_AUTOUPDATE"),
+  HANNAH_AGENT_ALWAYS_NOTIFY_UPDATE: truthy("HANNAH_AGENT_ALWAYS_NOTIFY_UPDATE"),
+  HANNAH_AGENT_DISABLE_PRUNE: truthy("HANNAH_AGENT_DISABLE_PRUNE"),
+  HANNAH_AGENT_DISABLE_TERMINAL_TITLE: truthy("HANNAH_AGENT_DISABLE_TERMINAL_TITLE"),
+  HANNAH_AGENT_SHOW_TTFD: truthy("HANNAH_AGENT_SHOW_TTFD"),
+  HANNAH_AGENT_DISABLE_AUTOCOMPACT: truthy("HANNAH_AGENT_DISABLE_AUTOCOMPACT"),
+  HANNAH_AGENT_DISABLE_MODELS_FETCH: truthy("HANNAH_AGENT_DISABLE_MODELS_FETCH"),
+  HANNAH_AGENT_DISABLE_MOUSE: truthy("HANNAH_AGENT_DISABLE_MOUSE"),
+  HANNAH_AGENT_FAKE_VCS: process.env["HANNAH_AGENT_FAKE_VCS"],
+  HANNAH_AGENT_SERVER_PASSWORD: process.env["HANNAH_AGENT_SERVER_PASSWORD"],
+  HANNAH_AGENT_SERVER_USERNAME: process.env["HANNAH_AGENT_SERVER_USERNAME"],
+  HANNAH_AGENT_DISABLE_FFF: fff === undefined ? process.platform === "win32" : truthy("HANNAH_AGENT_DISABLE_FFF"),
+
+  // Experimental
+  HANNAH_AGENT_EXPERIMENTAL_FILEWATCHER: Config.boolean("HANNAH_AGENT_EXPERIMENTAL_FILEWATCHER").pipe(
+    Config.withDefault(false),
+  ),
+  HANNAH_AGENT_EXPERIMENTAL_DISABLE_FILEWATCHER: Config.boolean("HANNAH_AGENT_EXPERIMENTAL_DISABLE_FILEWATCHER").pipe(
+    Config.withDefault(false),
+  ),
+  HANNAH_AGENT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT:
+    copy === undefined ? process.platform === "win32" : truthy("HANNAH_AGENT_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"),
+  HANNAH_AGENT_MODELS_URL: process.env["HANNAH_AGENT_MODELS_URL"],
+  HANNAH_AGENT_MODELS_PATH: process.env["HANNAH_AGENT_MODELS_PATH"],
+  HANNAH_AGENT_DB: process.env["HANNAH_AGENT_DB"],
+
+  HANNAH_AGENT_WORKSPACE_ID: process.env["HANNAH_AGENT_WORKSPACE_ID"],
+  HANNAH_AGENT_EXPERIMENTAL_WORKSPACES: enabledByExperimental("HANNAH_AGENT_EXPERIMENTAL_WORKSPACES"),
+
+  // Evaluated at access time (not module load) because tests, the CLI, and
+  // external tooling set these env vars at runtime.
+  get HANNAH_AGENT_DISABLE_PROJECT_CONFIG() {
+    return truthy("HANNAH_AGENT_DISABLE_PROJECT_CONFIG")
+  },
+  get HANNAH_AGENT_EXPERIMENTAL_REFERENCES() {
+    return enabledByExperimental("HANNAH_AGENT_EXPERIMENTAL_REFERENCES")
+  },
+  get HANNAH_AGENT_TUI_CONFIG() {
+    return process.env["HANNAH_AGENT_TUI_CONFIG"]
+  },
+  get HANNAH_AGENT_CONFIG_DIR() {
+    return process.env["HANNAH_AGENT_CONFIG_DIR"]
+  },
+  get HANNAH_AGENT_PURE() {
+    return truthy("HANNAH_AGENT_PURE")
+  },
+  get HANNAH_AGENT_PERMISSION() {
+    return process.env["HANNAH_AGENT_PERMISSION"]
+  },
+  get HANNAH_AGENT_PLUGIN_META_FILE() {
+    return process.env["HANNAH_AGENT_PLUGIN_META_FILE"]
+  },
+  get HANNAH_AGENT_CLIENT() {
+    return process.env["HANNAH_AGENT_CLIENT"] ?? "cli"
+  },
+}

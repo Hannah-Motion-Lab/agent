@@ -1,0 +1,5 @@
+{"v":"hannah.v0","taskId":"t_fixture","seq":1,"ts":0,"type":"task.accepted","data":{"title":"compilar","mode":"companion","cwd":"/home/user/Downloads","narration":"full"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":2,"ts":0,"type":"task.started","data":{"model":""}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":3,"ts":0,"type":"task.tool","data":{"tool":"bash","status":"started","target":"npm run build","summary":"running a command"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":4,"ts":0,"type":"task.tool","data":{"tool":"bash","status":"failed","summary":"exit code 1"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":5,"ts":0,"type":"task.failed","data":{"summary":"the build failed","error":"the build failed","recoverable":false}}

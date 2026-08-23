@@ -1,0 +1,764 @@
+# Roadmap — hannah-agent
+
+> Status: master plan, agreed baseline for development. Dates assume a solo
+> developer at part-time pace starting September 2026; durations matter more
+> than the calendar. Every milestone lists **acceptance criteria** — a milestone
+> is done when they pass, not when the code exists.
+>
+> You are here: **Phase 3, one milestone from done** (2026-08-22).
+>
+> - **P0** complete except M0.3's repo upload — the owner's step.
+> - **P1** complete except the model-driven end-to-end run, which needs an API key.
+> - **P2** complete: M2.1–M2.5.
+> - **P3** complete: M3.0 the answer path, M3.1 workspace & FS ergonomics, M3.2
+>   the macro library (bar the model-backed trials, also key-blocked), M3.3 MCP
+>   policy, M3.4 queued tasks, M3.5 history & observability, M3.6 embodiment.
+>
+> Next: **Phase 4 — autonomy, hardening, packaging.** Before starting it, the
+> key-blocked verification in KNOWN-GAPS #1 and #2 should be run: P4 should not
+> build on a path that has never met a real model.
+
+Caveats raised during the work — what is knowingly incomplete, why, and how it
+gets closed — live in [KNOWN-GAPS.md](KNOWN-GAPS.md) rather than in the phase
+notes below. A caveat mentioned once is a caveat that has been lost.
+
+## Phase map
+
+| Phase | Theme | Duration | Target | Exit demo |
+| --- | --- | --- | --- | --- |
+| **P0** | Foundations & audit | ~2 wks | **done 2026-08-18** | Engine understood, decisions closed, CI green |
+| **P1** | Headless core + Hannah façade | ~3 wks | **done 2026-08-21** (see note) | Full task lifecycle driven by `curl` |
+| **P2** | Backend bridge — voice-driven hands | ~4 wks | **done 2026-08-21** | Scenarios S1–S4 (`npm run demo:agent`) |
+| **P3** | Desktop macro layer | ~6 wks | **done 2026-08-22** | 10 macros + task history + embodiment |
+| **P4** | Autonomy, hardening, packaging | ~6 wks | Q1 2027 | Hannah runs as a service; v1.0 |
+
+Rules of engagement:
+
+- **No phase-skipping for features.** A tempting P3 macro before the P1 façade
+  exists creates the exact coupling the façade prevents.
+- **Docs move with code**: a milestone that changes a contract updates
+  INTEGRATION/SECURITY + an ADR in the same change.
+- **Upstream checkpoint at every phase end** (UPSTREAM.md procedure).
+
+---
+
+## Phase 0 — Foundations & audit — **DONE 2026-08-18**
+
+Goal: know the engine we own, close every open decision, make the repo a real
+project. No feature code.
+
+| Milestone | Status | Evidence |
+| --- | --- | --- |
+| M0.1 engine audit | ✅ | [audit/M0.1-engine-audit.md](audit/M0.1-engine-audit.md); no `[VERIFY]` left in ARCHITECTURE.md |
+| M0.2 de-branding | ✅ | [DEBRANDING.md](DEBRANDING.md); behavioral boot check creates only `hannah-agent` paths |
+| M0.3 repo & process | ⏳ **upload is yours** | CI workflow, version reset to `0.1.0`, AGENTS.md/CONTEXT.md rewritten — all committed; the GitHub remote is the owner's step (D5) |
+| M0.4 test baseline | ✅ | [audit/M0.4-test-baseline.md](audit/M0.4-test-baseline.md); 4 suites green, quarantine list empty |
+| M0.5 decision closure | ✅ | ADRs 0004, 0009, 0010, 0011 accepted with audit evidence; all 11 now Accepted |
+
+Notable findings that changed the plan: the engine has **no SSE replay and no
+approval timeout** (both become façade responsibilities, M1.3), its permission
+patterns are **per-shell-command** so the SECURITY presets map directly onto
+config (M1.2), and the model catalog fetch went to **upstream's proxy** —
+since resolved in M1.1 by pointing at models.dev directly.
+
+### M0.1 — Engine audit
+The checklist at the end of ARCHITECTURE.md, executed and written down (either
+inline, replacing the **[VERIFY]** marks, or as `docs/audit/` notes):
+route table + committed `openapi.json`, event catalog, permission schema and
+response flow, `question` tool round-trip, abort semantics, storage locations,
+**network egress inventory**, minimal-config boot matrix (Anthropic-only /
+Ollama-only / offline), subagent limits.
+**Accept when**: no **[VERIFY]** markers remain in ARCHITECTURE.md; egress
+inventory reviewed against ADR-0009.
+
+### M0.2 — De-branding completion
+Execute DEBRANDING.md decisions: config/data dirs (`~/.config/hannah-agent`,
+`~/.local/share/hannah-agent`, project `.hannah-agent/`), config filenames
+(`hannah-agent.json[c]`), serve banner and user-visible strings, schema URL
+policy, docs-link policy in error messages. Test fixtures updated.
+**Accept when**: DEBRANDING verification greps return only the documented
+exceptions; typecheck + test baseline unchanged.
+
+### M0.3 — Repo & process hygiene
+User uploads the repo (org remote). Then: CI workflow (bun install → typecheck →
+test subset on push/PR), branch convention (`main` protected, feature branches),
+version reset to `0.1.0` (fork versioning per ADR-0004), rewrite root
+`AGENTS.md`/`CONTEXT.md` for this fork (dev rules: fork discipline, façade seam,
+doc-with-code rule), delete remaining upstream-specific CLI noise from docs.
+**Accept when**: CI green on a trivial PR; AGENTS.md describes *this* project.
+
+### M0.4 — Test baseline
+Run the inherited suites (`packages/agent`, `packages/core`); classify: passing /
+needs-network / needs-keys / broken-by-pruning. Quarantine list committed; the
+passing subset wired into CI (that subset is the regression net for everything
+that follows).
+**Accept when**: CI runs the green subset; quarantine list has an owner note
+per entry (fix in phase X / won't fix / needs secret).
+
+### M0.5 — Decision closure
+ADRs 0004–0011 reviewed with fresh audit knowledge and flipped from Proposed to
+Accepted (or amended). The decision queue at the bottom of this file is empty
+of P0/P1 blockers.
+
+---
+
+## Phase 1 — Headless core + Hannah façade
+
+Goal: hannah-agent is a finished *standalone* product for exactly one client
+shape: an HTTP caller with the INTEGRATION.md contract. No Hannah repos touched.
+
+### M1.1 — Hannah profile — **DONE 2026-08-19**
+A documented config profile (`hannah-agent.jsonc` template + env overrides):
+agent model (per ADR-0007: Anthropic default, Ollama alternative), disabled
+services (share/account/mdns/telemetry per ADR-0009), workspace roots,
+retention. Boot with profile = clean egress (only provider + catalog).
+**Accepted**: the boot matrix passes in all four shapes; the `HANNAH_AGENT_*`
+env reference table is in the root README.
+
+Shipped: `profile/hannah-agent.jsonc` (Anthropic) and
+`profile/hannah-agent.local.jsonc` (Ollama, declares the provider inline so it
+needs no catalog), `scripts/install-profile.sh`, `scripts/boot-matrix.sh`
+(offline / anthropic / ollama / **airgap** — the last runs the server *and* its
+probe inside an unprivileged network namespace), and
+`packages/agent/test/hannah/profile.test.ts`, which parses both profiles
+against the engine schema and locks the `companion` preset so a future edit
+cannot quietly widen it. Full write-up: [PROFILE.md](PROFILE.md).
+
+Catalog decision (ADR-0009's open question): both endpoints were fetched and
+compared — `models.opencode.ai` is a **byte-identical mirror** of `models.dev`,
+so the default source is now models.dev. Same data, one less dependency on the
+project we forked from.
+
+Deferred to M1.2 by design: **workspace roots**. D3 set them to `/`, so the
+roots list is inert and the real boundary is the sensitive-path denylist, which
+belongs to the policy layer — putting a decorative `roots` key in the profile
+would imply a protection that isn't there. (M1.2 implemented the roots check
+anyway, with tests proving it enforces when the list is narrowed, so tightening
+it later is a config change rather than a redesign.)
+
+### M1.2 — Policy layer & presets — **DONE 2026-08-19**
+SECURITY.md §4 implemented: hard policy (sensitive paths, danger commands,
+roots enforcement) + the three presets mapped onto the engine permission
+system; secret redaction in events.
+**Accepted**: 135 policy tests pass, including all 19 bypass shapes from
+SECURITY §7; presets convert to engine rulesets and resolve differently per
+preset, which is what the façade attaches per task.
+
+Shipped in `packages/agent/src/hannah/policy/`:
+
+- `paths.ts` — sensitive-path denylist covering SSH/GPG keys, cloud and cluster
+  credentials, keyrings, browser profiles, `.env`/`*.pem`/service-account
+  shapes, **and the agent's own credential store** so a task cannot read back
+  the provider keys the engine runs on. Resolution walks to the nearest
+  existing ancestor and `realpath`s it, so `~`, `..`, and symlinks into a
+  denied tree are all covered. Public halves (`id_*.pub`, `.env.example`) are
+  explicit exceptions.
+- `commands.ts` — danger-command scanner. Recursively expands the indirection
+  shapes before matching: `sh -c`/nested shells, heredoc bodies, `xargs`,
+  `find -exec`, `$(…)`, backticks, `;`/`&&`/`|` chains, env prefixes, and
+  absolute/relative paths to the binary.
+- `presets.ts` — the three presets as engine permission config, plus the
+  `risk` tiering that decides voice-vs-HUD approval (T7).
+- `redact.ts` — secret redaction for events and the audit log.
+- `index.ts` — the hard-policy decision function.
+
+**Wired, not just written**: the hook lives at the top of `Permission.ask`
+(`packages/agent/src/permission/index.ts`), so it evaluates on every permission
+request — including ones a preset would auto-allow and ones already covered by
+an `always` approval. `test/hannah/policy-enforcement.test.ts` drives the real
+service with an allow-everything ruleset and asserts the denials still win.
+
+Carried into M1.3 and **done there**: `redact.ts` is now called by the event
+translator and by every audit write, with a test asserting a leaked
+`ANTHROPIC_API_KEY` reaches neither the SSE stream nor the audit log.
+
+### M1.3 — Façade v0 — **DONE 2026-08-19** (one acceptance item deferred)
+`packages/agent/src/hannah/`: routes, task↔session mapping, event translator
+(engine bus → `hannah.v0` vocabulary), SSE with resume, bearer auth, timebox,
+409 concurrency guard, audit log JSONL.
+**Accept when**: INTEGRATION §8 fixture suite passes end-to-end against a real
+engine with a real model; event streams recorded into `docs/fixtures/`.
+
+Shipped in `packages/agent/src/hannah/facade/`:
+
+| Module | Role |
+| --- | --- |
+| `protocol.ts` | The `hannah.v0` vocabulary, envelope, and create-task validation |
+| `store.ts` | Task state machine, per-task `seq`, global cursor, resume ring buffer |
+| `translate.ts` | Engine bus → the 13 published event types, redacted and speakable |
+| `service.ts` | Orchestration: run, timebox, approvals/questions with timeouts, cancel |
+| `routes.ts` | `/hannah/v0` over Web `Request`/`Response`, bearer auth, SSE |
+| `engine.ts` | The `EnginePort` adapter onto real engine services |
+| `audit.ts` | Append-only JSONL, daily-rotated, redacted |
+| `index.ts` | Mount into the engine router (raw route, off the HttpApi surface) |
+
+Verified: 28 contract tests (`facade.test.ts`) covering create / approve / deny /
+approval timeout / question round-trip and timeout / cancel / timebox / engine
+crash / 409 / auth on-off / SSE resume / redaction / audit; 3 adapter tests
+against the **real** engine services; 5 fixture tests that regenerate
+[`docs/fixtures/`](fixtures/). The façade also answers over the wire — a live
+`serve` returns `/hannah/v0/health`, validates bodies, and 404s unknown paths.
+
+**Deferred, and stated plainly**: the "with a real model" half of the acceptance
+criterion has not run — it needs an `ANTHROPIC_API_KEY`, which this environment
+does not have. Everything below the model is exercised (the engine adapter runs
+against real services; the fake-LLM harness exists in
+`test/lib/llm-server.ts` for the M1.4 smoke run). Treat the model-driven E2E as
+M1.4's first task, not as silently satisfied.
+
+### M1.4 — Dev harness & docs — **DONE 2026-08-21**
+`scripts/hannah-smoke.ts` (drive the façade: create → approve → complete;
+cancel; question; timeout), README quickstart updated, TUI confirmed still
+working as debug console (ADR-0011).
+**Accepted**: the script runs from the README alone against a live server, and
+its output is legible without reading the source.
+
+The smoke run immediately earned its keep — it found two defects that every
+unit test had missed, because both only appear against the real engine:
+
+1. **`InstanceRef not provided`.** Engine services are instance-scoped (sessions,
+   permissions and the bus all resolve through a project instance). The HTTP
+   handlers get that from the `x-hannah-agent-directory` header via middleware;
+   the façade had no equivalent, so every task died at `createSession`. The
+   adapter now enters the instance for the task's own `cwd` and remembers it per
+   session, so prompt, cancel and replies re-enter the same one.
+2. **A silently dead event subscription.** The adapter tapped the bus through
+   the Effect-side bridge, which only exists *inside* an instance context — so
+   it failed to attach and swallowed the error, meaning no engine event would
+   ever have reached the backend. It now listens on `GlobalBus`, the
+   process-wide emitter every instance publishes into, which needs no scoping
+   and cannot fail silently.
+
+Also fixed from the same run: `session.error` payloads are tagged
+(`{ name, data: { message } }`), and reading the wrong field turned every engine
+failure into the useless sentence "the task hit an error". Failures now carry
+the real message and the error name, and `recoverable` is set from the name.
+
+Known upstream wart, now documented and hinted at by the script: with no
+provider credentials the engine reports **`Model not found`** and may suggest
+the exact model you asked for.
+
+Exit demo (recorded): three fixture tasks — organize a scratch folder
+(approval), run a failing command (failure path), long task cancelled — all via
+`curl`, audit log shown.
+
+---
+
+## Phase 2 — Backend bridge (work in hannah-backend + hannah-frontend)
+
+Goal: scenarios S1–S4. Specs live in INTEGRATION.md §4–§7; this phase
+implements them in the other repos. Backend's own rules apply throughout:
+**always stream, never store user content, every sidecar optional** — a broken
+or absent agent must degrade to conversation, never to an error.
+
+House style in that repo (match it, do not import this one's): ES modules,
+Spanish JSDoc with English identifiers, `// src/path.js` header comment,
+`config.<sidecar> = { enabled, sidecarUrl }`, sidecar clients that **never
+throw** and return `{ error }`, Jest with `--experimental-vm-modules`.
+
+### M2.1 — `agent.js` adapter — **DONE 2026-08-21**
+`backend/src/pipeline/agent.js`, mirroring `motion.js`/`vision.js`: health
+polling with a cached verdict, task create/cancel, approval and answer
+round-trips, and an SSE consumer that reconnects with `Last-Event-ID` and
+reports a truncated replay rather than assuming it caught up. Config block
+`agent: { enabled, sidecarUrl, token, … }` with **`AGENT_ENABLED` false by
+default**.
+**Accepted**: 19 tests pass against a mock façade replaying the shared
+fixtures, and the flag-off case asserts — by spying on `fetch` — that *zero*
+network calls happen. Verified additionally against the **real** sidecar: the
+adapter completed health → SSE connect → create → live events → final state
+across the two repos.
+
+Shipped in `hannah-backend`: the `agent` config block (`AGENT_ENABLED` false by
+default), `src/pipeline/agent.js`, `agent_available` in `GET /health`,
+`tests/unit/mock-facade.js`, `tests/unit/agent.test.js`, the fixtures copied to
+`tests/fixtures/`, and README §5.8.
+
+Two decisions worth carrying into M2.2:
+
+- **The 409 is information, not an error.** A second task while one runs returns
+  `{ error: "task_already_running", activeTaskId }` so the persona can decide
+  to queue verbally or cancel — collapsing it into a generic failure would take
+  that choice away.
+- **A truncated replay is reported, never papered over.** If the agent says its
+  buffer had already dropped part of the gap, the subscription fires `onDesync`
+  so the caller refetches state instead of narrating a stale story.
+
+### M2.2 — `[TASK:]` protocol — **DONE 2026-08-21**
+Persona protocol text in `config.js`, tag interception in
+`processAndSendSegment` exactly like `[MOTION:]`, dispatch to the adapter, and
+graceful degradation when the sidecar is down.
+**Accepted**: 14 tests (10 orchestrator + 4 prompt) cover all three. The tag is
+stripped by the same regexes as `[MOTION:]`/`[EMOTION:]` — closed, unterminated
+mid-stream, and all three delimiter styles — and assertions check what actually
+reached TTS, the subtitle field, and the motion model.
+
+Shipped in `hannah-backend`: `config.llm.taskProtocol`, availability-gated
+prompt assembly in `llm.js`, `dispatchTask` + tag interception in
+`orchestrator.js`, `tests/unit/orchestrator-task.test.js`,
+`tests/unit/llm-task-protocol.test.js`, README §5.8.
+
+The design decision worth carrying forward: **degradation lives in the prompt,
+not in error handling.** The task protocol is appended to the system prompt only
+when `agent.isAvailable()`, so with the sidecar down the persona never learns
+the tag exists — she cannot promise something nothing will execute. Handling it
+after the fact would mean apologising for a promise she should never have made.
+
+Two safety nets behind that: a per-turn guard so a model repeating the tag
+dispatches once, and `agent_task_started`/`agent_task_rejected` messages so a
+failed dispatch is never silent while she is saying "voy con eso".
+
+Incidental fix: `conversationManager`'s cleanup interval was not `unref`'d, so
+it held the process (and Jest) open. One line, but it is the difference between
+a clean shutdown and a hung CI worker.
+
+### M2.3 — WS + HUD — **DONE 2026-08-21**
+The WS message types (INTEGRATION §4.2), plus the HUD task panel: state,
+timeline, approve/deny/cancel.
+**Accepted**: 27 tests (20 bridge + 7 end-to-end over a real WebSocket). The
+end-to-end suite drives mock façade → SSE → bridge → WebSocket → client →
+`AGENT_APPROVAL` → façade and asserts the approval arrives with `by: "hud"`
+having touched no audio path at all; a parameterised case proves the panel
+reaches a terminal state for completed, failed **and** cancelled.
+
+Shipped in `hannah-backend`: `src/gateway/agentBridge.js`, the three HUD
+commands in `gateway/websocket.js`, `agentBridge.start()` in `server.js`, the
+missing `AGENT_*` block in `.env.example`, `tests/unit/agent-bridge.test.js`,
+`tests/unit/agent-ws.test.js`, README §5.8 + §9. In `hannah-frontend`:
+`src/components/AgentTaskPanel.jsx`, the agent slice in `store/hannahStore.js`,
+the message handlers and command senders in `hooks/useWebSocket.js`, the mount
+in `App.jsx`, README.
+
+Four decisions worth carrying into M2.4:
+
+- **One subscription per process, not per connection.** The façade's stream is
+  global, so N clients would open N streams competing over the same
+  `Last-Event-ID` cursor. Owning it in the server is also what makes a task
+  survive a browser reload — the bridge replays a bounded timeline to whoever
+  connects mid-task.
+- **Nothing in the HUD is optimistic.** A click only sends the command; what
+  closes the modal is `task.approval.resolved` coming back. That is not
+  pedantry — it is exactly why the modal will also close correctly in M2.4 when
+  the resolver is *voice* or the 120 s timeout rather than a button.
+- **Success is not acked; failure is.** An expired approval or a dead sidecar
+  produces no event, so `agent_command_failed` exists purely so the HUD can
+  never wait forever for an answer that is not coming.
+- **An unknown task is reconciled, not guessed.** If the backend restarts
+  mid-task the first event has no header; the bridge fetches `GET /tasks/{id}`
+  rather than rendering a half-built panel.
+
+Contract additions documented in INTEGRATION §4.2: `agent_task_progress` carries
+a `kind` and absorbs `task.approval.resolved`/`task.answered` (for the HUD they
+*are* timeline entries); approvals and questions carry an absolute `expiresAt`
+so the countdown is visible — silence means "no", and a button with no clock on
+it hides that.
+
+### M2.4 — Voice approvals & narration — **DONE 2026-08-21**
+Pending-approval intent routing, narration via `processTextTurn`, the narration
+budget (§6), and barge-in semantics (§5).
+**Accepted**: 52 tests (31 lexical/intent + 20 narration & routing + the
+barge-in case in the WS suite). Approve-by-voice reaches the façade with
+`by: "voice"`; deny-by-silence narrates the notice; barge-in over a running task
+sends **no** cancel; `high`-risk voice grants are refused and spoken back as
+"use the panel".
+
+Shipped in `hannah-backend`: `classifyPendingIntent` + `isStopIntent` in
+`pipeline/llm.js`, the narrator and `routeUtterance` in `gateway/agentBridge.js`,
+utterance-start stamping and busy tracking in `gateway/websocket.js`, routing in
+`pipeline/orchestrator.js`, graceful shutdown in `server.js`,
+`AGENT_NARRATE_PROGRESS_MS`, `tests/unit/agent-intent.test.js`,
+`tests/unit/agent-voice.test.js`. In `hannah-frontend`: the high-risk line in
+the approval block.
+
+Four decisions worth carrying into M2.5:
+
+- **"After the question" is about when the utterance *started*.** The gateway
+  stamps `SPEECH_START`; a phrase that began before the approval appeared never
+  answers it. Reading T7 as "the transcript arrived after" would have let the
+  ordinary case — the user talking over the question — silently grant it.
+- **Ambiguity never grants.** The classifier's only accepted outputs are four
+  words; anything else, including an outright failure, becomes `unrelated`,
+  which leaves the approval pending and expiring into deny. The safe outcome is
+  the default path, not an error branch.
+- **A lexical shortcut decides the obvious cases before the model does.** "sí"
+  must not depend on a reachable LLM. Writing that shortcut is also what
+  surfaced the bug below.
+- **The narrator is injected, not imported.** The orchestrator already imports
+  the bridge to route utterances; injecting `processTextTurn` at composition
+  avoids an ES module cycle and makes narration testable with a spy.
+
+Bug the tests caught: the affirmative shortcut ended in `\b`, which never
+matches after `sí` — the accented character is not a word character — so **every
+Spanish "sí" fell through to the model**, and with no model reachable it
+resolved to `unrelated`, i.e. silence. The regression test is the accent list.
+
+### M2.5 — E2E hardening — **DONE 2026-08-21**
+Latency budget (task acknowledged aloud < 2 s from tag), error drills (agent
+killed mid-task, backend restarted mid-task, SSE dropped), demo script.
+**Accepted**: 8 drills in `tests/unit/agent-drills.test.js` plus the latency
+case; every drill asserts what was *not* said as well as what was. Backend suite
+149/149 across 12 suites. `npm run demo:agent` walks S1–S5 against the mock
+façade and exits non-zero if any invariant breaks.
+
+Shipped in `hannah-backend`: lost-contact detection, task adoption on start and
+snapshot-based correction in `gateway/agentBridge.js`; `listTasks()` in
+`pipeline/agent.js`; non-blocking dispatch in `pipeline/orchestrator.js`;
+`AGENT_LOST_CONTACT_MS`; `scripts/agent-demo.mjs` (`npm run demo:agent`);
+`tests/unit/agent-drills.test.js`; `tests/unit/module-mocks.js` +
+`module-mocks.test.js`; README §5.8 "When things break".
+
+The rule the whole milestone is built around: **an unknown outcome is a result,
+not an absence.** When the stream dies the task is closed as *lost*, never as
+finished, and Hannah says she does not know. Silence would be worse than either
+verdict — she just said "voy con eso" and the user would wait forever. Only a
+task the backend closed itself can be reopened, so a later reconcile can correct
+the story in either direction without ever overwriting something the façade
+actually said.
+
+**Three bugs found by running the drills and the demo — none by typechecking:**
+
+- **A `SPEECH_END` with no audio left the floor taken.** The early return took a
+  `break` that skipped releasing it, so narration went mute for a full minute
+  (the self-healing TTL was the only thing that saved it). Found because the
+  demo's barge-in scene ran before the lost-contact scene and swallowed its
+  spoken verdict.
+- **The affirmative shortcut missed `"sí, dale"`** — the actual phrase people
+  say, and the one in this document's own sequence diagram. It anchored the
+  whole utterance instead of matching words, so every real approval went to the
+  model, and with no model reachable resolved to silence. Now word-based, with
+  mixed phrases ("claro que no") deliberately falling through, because what the
+  shortcut cannot decide must not be granted.
+- **A slow sidecar delayed Hannah's acknowledgement.** Dispatch was awaited
+  before synthesis, so a sidecar taking 8 s made her wait 8 s to say "voy con
+  eso" — straight through the 2 s budget. The dispatch now starts before TTS and
+  is awaited at the *end* of the turn instead.
+
+Incidental hardening: mock module factories moved to `tests/unit/module-mocks.js`
+with a guard test comparing them to the real exports. An incomplete ESM mock had
+broken an unrelated suite with a cryptic `SyntaxError` three separate times; now
+adding an export fails one readable assertion naming the missing symbol.
+
+Exit demo (recorded, live-able): `npm run demo:agent` covers S1 (organize
+downloads, approval granted by voice), S2 (the same approval answered from the
+HUD with the mic muted), S3 (deny), S4 (barge-in — no cancel), S5 (agent
+disappears — honest account). Running it live additionally needs the sidecar on
+:8006 and a model for the persona.
+
+
+## Phase 3 — Desktop macro layer
+
+Goal: from "can do tasks" to "does *your* desktop's recurring things well".
+
+Two milestones were added when Phase 2 finished and Phase 3 was scoped. M3.0 is
+a prerequisite the earlier plan missed; M3.6 answers a question P2 raised but
+did not close.
+
+- **M3.0 — The answer path** — **DONE 2026-08-21** *(blocks M3.2)*: today the
+  agent's own prose reaches the user only as `task.progress`, **truncated to 120
+  characters**, and `task.completed.summary` is just the last such line. That is
+  fine for "I moved 23 files" and useless for "system status report" or "find
+  the file that…" — macros whose *output is the deliverable*. `task.output` is
+  declared in the protocol and emitted nowhere; `context.language` is stored on
+  the task and read nowhere, so the agent answers in English regardless of who
+  is asking. Fix all three, and split delivery the way the rest of the seam
+  already does: the HUD gets the full text, the voice gets the gist.
+  *Accept*: a task whose result is an answer reaches the user complete in the
+  HUD and conversational in the voice, in the language the persona is speaking.
+  **Accepted**: agent 176 tests (6 new in `facade.test.ts`), backend 155 across
+  12 suites, a fifth canonical fixture `status-report.jsonl` generated from the
+  real façade, and a `S3b` scene in `npm run demo:agent` asserting the answer
+  reaches the panel whole.
+
+  Two decisions worth carrying into M3.2. **The split is HUD-full /
+  voice-gist**, the same split `translate.ts` already makes for events — the
+  persona gets up to 1200 characters and two sentences, because reading a
+  twenty-line list aloud is worse than not answering. And **an answer-derived
+  progress line carries `answer: true` so the backend does not speak it**: only
+  the façade knows the full text is one event behind, and saying half an answer
+  and then the answer is worse than either alone. Found by running the demo.
+
+  Also closed here: `context.language` was stored on the task and read nowhere,
+  so the agent answered in English regardless and the persona translated on the
+  fly. It is now appended to the prompt as an instruction that leaves commands,
+  code, paths and tool arguments alone.
+
+- **M3.1 — Workspace & FS ergonomics** — **DONE 2026-08-22**: roots config
+  surfaced to the persona (so Hannah knows where she may work), per-task cwd
+  inference rules, trash-instead-of-delete where possible.
+  **Accepted**: 13 tests in `test/hannah/workspaces.test.ts` (agent 189 total),
+  3 prompt tests in the backend (158 across 12 suites).
+
+  The gap this closed: **every task inherited `process.cwd()`**, so "ordena mis
+  descargas" and "revisa mis repos" both ran wherever the sidecar was launched
+  from. `PolicyWorkspaces.resolveCwd` now picks most-specific-first — explicit
+  `cwd`, a real path in the prompt, a root named in the prompt, the fallback —
+  and anything that fails validation *falls through* rather than failing the
+  task: landing in the default directory is recoverable, refusing to start
+  because a folder was misspelled is not. A directory inside the denylist is
+  never chosen.
+
+  Roots are also the vocabulary the persona is given (`health.workspaces` →
+  system prompt), and only directories that exist are offered: a persona that
+  offers to tidy a folder nobody can open is worse than one that offers nothing.
+
+  **Trash-instead-of-delete is an instruction, not a rewrite.** If `gio` /
+  `trash-put` / `trash` is on `PATH` the agent is told to prefer it; `rm` stays
+  available and stays high risk. Silently rewriting `rm` would make the approval
+  the user sees a lie. What changed is the *question*: it used to read "run
+  `rm -rf ./build`" and now reads "permanently delete `./build`" versus "move
+  `./build` to the trash" — the difference matters most in the one place it was
+  invisible, a question asked out loud.
+
+  One thing worth carrying: **the canonical fixtures had become
+  machine-dependent** the moment cwd resolution read the real filesystem, since
+  `~/Downloads` exists for some developers and not others. `resolveCwd` is now
+  an injectable service option and the fixture harness pins it. Fixtures exist
+  to pin the wire vocabulary, not the disk.
+- **M3.2 — Macro library v1** — **DONE 2026-08-22** (engine skills + curated
+  prompts): organize-downloads, open-project, media-control, file-screenshot,
+  system-status, git-housekeeping, download-and-file, archive-old-files,
+  launch-app, find-file. *Accept*: each macro ≥ 9/10 success on its scripted
+  trial; failures degrade with a spoken explanation.
+  **Partially accepted — see the caveat below.** Shipped: the catalog
+  (`packages/agent/src/hannah/macros/`), ten `profile/skills/*/SKILL.md` loaded
+  by the engine's own skill mechanism, `GET /hannah/v0/macros`, the available
+  list in `health`, `macro` on create / `task.accepted` / `GET /tasks/{id}`,
+  23 tests (agent 212 across 8 files), the persona-side listing in the backend
+  (161 across 12 suites), `scripts/macro-trials.ts`, and
+  [docs/MACROS.md](MACROS.md).
+
+  **The ≥9/10 bar is not met and cannot be met from here.** It is a claim about
+  a model's behaviour; it needs a running sidecar and an API key, the same
+  blocker as Phase 1's end-to-end run. `scripts/macro-trials.ts --runs 10` is
+  the harness that settles it, and `--dry` (in CI) proves the trials themselves
+  are well-formed. Six of the ten have sandboxed trials; `open-project`,
+  `media-control`, `launch-app` and `download-and-file` act on the live desktop
+  or the network, so a disposable directory cannot contain them.
+
+  Three decisions worth carrying into M3.3:
+
+  - **Degradation lives in the catalog.** A macro whose tool is missing is
+    absent from the list the persona is shown, so she never learns it exists and
+    cannot promise it. Same shape as the `[TASK:]` tag disappearing when the
+    sidecar is down, and the workspace list holding only folders that exist.
+    Failing halfway is worse than never offering — by then she has said she
+    would.
+  - **A match is a hint, not a gate.** Missing one costs quality (the agent
+    still does the job from the prompt); matching the *wrong* one loads
+    instructions for a different job. So matching is tuned for precision, and
+    is by **word set** rather than phrase — the literal phrase almost never
+    survives a real request.
+  - **Skills are a pointer, not a paste.** The prompt names the skill and the
+    engine loads it, so the instructions live in one file the user can read and
+    edit instead of being forked into every prompt. A test asserts the catalog's
+    skill name matches the file's frontmatter, because a dangling pointer
+    resolves to nothing at runtime and nobody notices.
+
+  Deviation from the plan: **one doc page with a section per macro**, not ten
+  pages. Ten thin files are harder to read and to keep honest than one page you
+  can search.
+
+  Recurring trap, third time: **injecting machine state made the canonical
+  fixtures machine-dependent again** — macro availability reads `PATH`, so
+  whether `organize-downloads` matched depended on who ran the generator.
+  `resolveMacro` is now an injectable service option next to `resolveCwd`, and
+  the fixture passes the id explicitly so the field is on the wire and stable.
+- **M3.3 — MCP policy + first server** — **DONE 2026-08-22**:
+  [ADR-0012](decisions/0012-mcp-allowlisting.md) for MCP allowlisting; first
+  server is Playwright MCP, pinned and shipped **disabled**.
+  **Accepted**: 11 tests (`test/hannah/mcp-policy.test.ts` plus the
+  never-remember-an-approval regression); agent 223 across 9 files.
+
+  Scoping this turned up **two live gaps**, both verified in the source:
+
+  - **An MCP tool is an opaque capability.** `session/tools.ts` asks with
+    `patterns: ["*"]` and empty metadata, so the sensitive-path denylist and the
+    danger-command scanner — the two things that make `read` and `bash` safe —
+    have nothing to inspect. `~/.ssh` is protected from `cat` and *not* from a
+    filesystem MCP server, and no per-call policy can fix that because there is
+    no call detail to police. Hence: trust decided per **server**, in code,
+    before the call; a non-allowlisted server's tools are denied by layer 1,
+    unappealably.
+  - **`risk()` fell through to `low` for any unrecognised permission key** — and
+    `low` is precisely the tier a spoken "sí" can grant (T7). An MCP tool was one
+    mishearing away from running. MCP tools are now never `low`; anything with
+    `network`, `filesystem` or `exec` is `high`. This was reachable by any
+    plugin-registered tool too, not only MCP.
+
+  The enabling change: `metadata: { mcp: <server> }` on the ask, which needed
+  `clientName` added to `MCP.McpTool`. Deriving the server from the tool key was
+  rejected — the key mangles both names together
+  (`playwright_browser_navigate` could be server `playwright` or
+  `playwright_browser`) and a guess inside an allowlist is a hole.
+
+  Also locked down by test: the ask carries `always: ["*"]`, so one `always`
+  reply would grant a whole server for the session. The façade only ever sends
+  `once` or `reject`. That was already true; it is now true *on purpose*.
+- **M3.4 — Background & queued tasks** — **DONE 2026-08-22**: the 409 limit is
+  lifted — one lane plus a bounded queue, `task.progress` already multiplexed by
+  `taskId`, per-task narration muting ("avísame solo cuando termines").
+  **Accepted**: agent 228 across 9 files, backend 172 across 12 suites, two new
+  demo scenes and two new invariants in `npm run demo:agent`.
+
+  **One lane, not N.** Concurrency would multiply the two genuinely hard things
+  here — approvals arriving from two places at once, and a narrator with two
+  stories to tell. A queue lifts the 409 without buying either. The 409 survives
+  only for a full queue (`MAX_QUEUED`, 3), which is a real refusal rather than
+  "not right now".
+
+  **Queued is not started, and the narration says so.** A task waiting behind
+  another is accepted with "esta empieza en cuanto acabe la anterior", and
+  `task.started` becomes narratable *only for a task that waited* — for it,
+  starting is the news. Treating acceptance as a start is the same lie as
+  treating a lost task as finished.
+
+  **What muting cannot silence.** `narration: "final"` drops progress from the
+  voice and keeps it in the HUD, but approvals and questions are always spoken.
+  Silencing one condemns it: nobody answers, it times out into a deny, and the
+  task dies without the user knowing why.
+
+  Two bugs the tests and the demo caught, both about state read at the wrong
+  moment: narration runs *after* the event switch, so checking the `queued` flag
+  the switch had just cleared always saw `false` (fixed with a separate
+  `everQueued`); and a promoted task kept its place in the HUD queue forever
+  because nothing re-emitted its header — leaving it waiting for a turn that had
+  already come.
+
+  Every path that ends a task promotes the next one, and `#promote()` is
+  idempotent so cancel and timebox can call it *before* awaiting the engine
+  interrupt as well as after. If the interrupt never settles, the queue must not
+  wait forever on a task that is already over.
+- **M3.5 — History & observability** — **DONE 2026-08-22**: task history
+  endpoint + HUD list view, audit-log viewer, retention purge.
+  **Accepted**: agent 243 across 10 files, backend 176 across 13 suites.
+
+  **History is derived from the audit log, not stored separately.** The log
+  already records every task's whole life, is append-only, and already has a
+  retention policy. A second store would be a second source of truth, and the
+  disagreement would surface as Hannah describing a task the log says never
+  happened. Live tasks win over recorded ones on overlap — same task, further
+  along.
+
+  Three details that are the difference between a viewer and a toy: a torn last
+  line from a crash is **skipped, not fatal** (that is why it reads line by line
+  rather than parsing the file); the caller's `limit` is **clamped**, because an
+  unbounded read of the log is a denial of service with extra steps; and purge
+  keys off **the day the file is for**, not its mtime, since an appended-to file
+  from last month would otherwise look fresh.
+
+  Deviation: retention runs **at startup**, not only as a command. A policy that
+  depends on someone remembering to run it is not a policy.
+  `scripts/audit-purge.ts` still exists, for trimming harder than the configured
+  window without a restart and for seeing what would go before it goes — it
+  defaults to a dry run.
+
+  Shipped: `Audit.history/trail/purge/files`, `GET /hannah/v0/history` and
+  `GET /hannah/v0/tasks/{id}/trail`, `retentionDays` on the service,
+  `HANNAH_AGENT_AUDIT_RETENTION_DAYS`, `scripts/audit-purge.ts`,
+  `test/hannah/history.test.ts`. Backend: `getHistory`/`getTrail`,
+  `GET /api/v1/agent/history` and `/agent/tasks/:id/trail` (HTTP, not WebSocket
+  — a point query with an answer, not a stream), `tests/unit/agent-history.test.js`.
+  Frontend: `AgentHistoryPanel.jsx` with an expandable per-task trail, opened
+  from the HUD.
+
+- **M3.6 — Embodiment of task state** — **DONE 2026-08-22**: the avatar is idle
+  while her hands work. Task state reaches the HUD and the voice but never the
+  body — `emotion` still comes only from the persona's `[EMOTION:]` tag on a
+  narration turn, so between narrations she looks like nothing is happening.
+  Drive avatar state from task state (working → thinking, approval pending →
+  alert with a glance at the panel, failure → the matching affect), and let a
+  long agent answer be delivered as speech with gestures rather than a wall of
+  text. *Accept*: with the HUD hidden, a bystander can tell from the avatar
+  alone that she is working, that she is waiting on the user, and that she has
+  finished.
+  **Accepted**: five postures derived in `frontend/src/store/agentPosture.js`,
+  driven into `VrmAvatar` each frame; 33 frontend tests; `npm run build` green.
+
+  **The distinguishing signal is the gaze, not the face.** Working looks at her
+  task — down and aside, and *stops following you*; waiting looks straight at
+  you and holds, with extra head weight because a half-look does not read as a
+  request; idle follows you as before. That is what a bystander reads across a
+  room; an eyebrow is not.
+
+  **The posture's emotion applies only while she is silent.** While she speaks,
+  what she is saying wins. A face contradicting its own voice is worse than a
+  still face.
+
+  **Posture is derived, never set.** Every agent reducer routes through
+  `withPosture`, which recomputes it from the resulting state. A second copy of
+  the state would drift, and the drift would surface as the face saying one
+  thing and the panel another. Terminal postures expire after 6 s using the
+  recorded change instant — no timer in the store.
+
+  A bug the posture tests exposed on their way past: **resolving an approval
+  never returned the task to `running` in the frontend store**, so the panel's
+  state pill read "espera permiso" after every single approval until the next
+  header arrived — announcing that it was waiting for something already
+  answered.
+
+  Also closed here (KNOWN-GAPS #4): the frontend now has **real verification** —
+  deps installed, `npm run build` exercising Vite for the first time (it passes,
+  so everything written in P2–P3 compiles for real, not only under esbuild), and
+  Vitest covering the store slice's three load-bearing rules.
+
+  Not covered: `SmplxAvatar` (the debug rig) ignores posture, and the 3D output
+  itself is unverifiable without a GPU and a person looking at it — the tests
+  fix the *decision*, not the render.
+
+Exit demo: a morning-routine chain ("revisa mis repos, ordena descargas y ponme
+al día") running as queued tasks while conversation continues.
+
+---
+
+## Phase 4 — Autonomy, hardening, packaging
+
+- **M4.1 — Sandbox spike → ADR**: bubblewrap/landlock (or container) wrapping
+  for the shell tool; decide the autonomous-mode requirement.
+- **M4.2 — Proactive suggestions**: backend triggers (vision events, schedules)
+  may *propose* tasks; execution still needs the normal approval path.
+- **M4.3 — Preference memory bridge**: agent task outcomes inform backend
+  memoryStore summaries ("she knows how you like your folders") — respecting
+  the SECURITY §6 privacy split.
+- **M4.4 — Model routing & cost**: cheap-model lane for trivial macros, cost
+  metrics surfaced in HUD stats, monthly budget guard.
+- **M4.5 — Packaging**: single-binary build (`--single`) exercised in CI,
+  systemd user unit + install doc, backend `npm run sidecar:agent` script.
+- **M4.6 — Security review gate**: full pass over SECURITY.md checklists +
+  fresh egress audit + injection red-team scripts. **Autonomous defaults ship
+  only after this gate.** Tag `v1.0.0`.
+
+---
+
+## Cross-cutting workstreams
+
+- **Upstream syncs**: phase-end checkpoint — review upstream security advisories
+  and provider fixes only; log every divergence in UPSTREAM.md's ledger.
+- **Testing pyramid**: engine unit subset (from M0.4) → façade contract fixtures
+  (M1.3) → backend adapter tests vs mock (M2.1) → scripted E2E drills (M2.5+).
+- **Docs discipline**: VISION stable; ARCHITECTURE/INTEGRATION/SECURITY updated
+  with the change that invalidates them; ADR for anything contract-shaped.
+
+## Risk register
+
+| Risk | Likelihood | Impact | Mitigation |
+| --- | --- | --- | --- |
+| Effect-based engine internals are hard to modify (steep learning curve) | High | Medium | Façade touches only high-level seams (M0.1 finds them); internal refactors out of scope |
+| v1↔v2 duality confuses changes (two session/tool stacks) | Medium | High | ADR-0004 freeze; audit maps which stack serves each runtime path; never edit both for one feature |
+| Small persona LLM misuses `[TASK:]` (over/under-triggering) | High | Medium | Strict protocol text + few-shot examples; dispatch validation layer in backend; measure in M2.5 |
+| Prompt injection through processed files/web | Medium | High | SECURITY T1 controls; red-team scripts in M4.6; network sends always gated |
+| Voice approval ambiguity (Spanish colloquial yes/no) | Medium | Medium | Intent check with explicit pending-question context; HUD fallback; timeout=deny |
+| Cloud-model cost creep | Medium | Low | Timebox + token caps (M1.3), routing (M4.4) |
+| Upstream drifts far; wanted fix hard to port | Medium | Low | Accepted cost of hard fork; ledger keeps diffs explainable |
+| Solo-dev burnout / scope creep | High | High | Phase exit demos are the only feature bar; macro library is deliberately curated, not open-ended |
+
+## Decision queue — resolved 2026-08-17
+
+All five closed by the owner on 2026-08-17:
+
+| # | Decision | Resolution |
+| --- | --- | --- |
+| D1 | Agent LLM default | **Default accepted**: Anthropic API default + Ollama alternative profile → ADR-0007 **Accepted** |
+| D2 | Accept `/hannah/v0` API + event vocabulary | **Accepted as drafted** — INTEGRATION.md is the binding contract for M1.3 → ADR-0005 and ADR-0006 **Accepted** |
+| D3 | Workspace roots initial list | **`/`** — the entire filesystem. The roots mechanism stays a config list (so it can be tightened later without redesign), but with this value the fence is inert: the sensitive-path denylist and preset gates (SECURITY §4) are the effective boundary |
+| D4 | Config-dir rename timing | **Default accepted**: now, in M0.2 → ADR-0008 **Accepted** |
+| D5 | GitHub org/repo name | **Default accepted**: owner picks the name at upload time (M0.3); tooling never creates/pushes the repo |

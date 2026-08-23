@@ -1,0 +1,9 @@
+# Test files excluded from the CI regression net (scripts/test-ci.sh).
+#
+# Format: one repo-relative test file per line, with a comment giving the
+# reason and the owner decision (fix in phase X / won't fix / needs secret).
+# Classification and the full baseline: docs/audit/M0.4-test-baseline.md
+#
+# The list is intentionally EMPTY as of 2026-08-18 — every suite is green
+# (core 1090, ui 27, tui 193, agent 3276). Adding an entry means accepting a
+# hole in the regression net, so it needs a reason and a phase.

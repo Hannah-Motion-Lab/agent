@@ -1,0 +1,6 @@
+{"v":"hannah.v0","taskId":"t_fixture","seq":1,"ts":0,"type":"task.accepted","data":{"title":"borrar builds","mode":"companion","cwd":"/home/user/Downloads","narration":"full"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":2,"ts":0,"type":"task.started","data":{"model":""}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":3,"ts":0,"type":"task.approval.requested","data":{"approvalId":"a_per_1","kind":"delete","summary":"permanently delete `./build`","command":"rm -rf ./build","risk":"high","timeoutMs":120000}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":4,"ts":0,"type":"task.approval.resolved","data":{"approvalId":"a_per_1","decision":"deny","by":"voice"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":5,"ts":0,"type":"task.progress","data":{"summary":"I left the build folders alone"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":6,"ts":0,"type":"task.completed","data":{"summary":"I left the build folders alone","stats":{"durationMs":6000,"toolCalls":0,"filesTouched":0,"tokensIn":0,"tokensOut":0}}}

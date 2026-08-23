@@ -1,0 +1,140 @@
+{
+  // ─────────────────────────────────────────────────────────────────────────
+  // Hannah profile — global config for the hannah-agent sidecar.
+  //
+  // Install:  scripts/install-profile.sh        (copies to ~/.config/hannah-agent/)
+  // Docs:     docs/PROFILE.md                   (every setting explained)
+  // Schema:   packages/core/src/v1/config/      (no hosted $schema — ADR-0008)
+  //
+  // This file configures the AGENT brain — the model that executes tasks on
+  // the computer. Hannah's *persona* (the voice you talk to) is a separate
+  // model configured in hannah-backend. The two are never the same model.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Models (ADR-0007) ────────────────────────────────────────────────────
+  // Requires ANTHROPIC_API_KEY in the environment. For a local-only setup,
+  // see the Ollama section in docs/PROFILE.md.
+  "model": "anthropic/claude-opus-5",
+  "small_model": "anthropic/claude-haiku-4-5",
+
+  // Only Anthropic is loaded. Every other provider in the catalog stays
+  // inert even if its API key happens to be in the environment — no
+  // accidental egress to a provider we did not choose.
+  "enabled_providers": ["anthropic"],
+
+  // ── Upstream services off (ADR-0009) ─────────────────────────────────────
+  "share": "disabled", // never upload session content anywhere
+  "autoupdate": false, // this fork updates via git, not a release channel
+
+  // ── Server (the sidecar Hannah's backend talks to) ───────────────────────
+  "server": {
+    "hostname": "127.0.0.1", // loopback only; never bind a LAN interface
+    "port": 8006, // Hannah's slot, after motion-lab on 8005
+    "mdns": false, // no LAN advertisement (SECURITY T5)
+    "cors": [] // no browser origins; the backend is the only client
+  },
+
+  // ── MCP servers (ADR-0012) ───────────────────────────────────────────────
+  // An MCP tool is an OPAQUE capability: the engine asks permission for it with
+  // no arguments, so the sensitive-path denylist and the command scanner have
+  // nothing to inspect. Trust is therefore decided per *server*, in code
+  // (`packages/agent/src/hannah/policy/mcp.ts`), not here — adding a server to
+  // this file is not enough to make it usable.
+  //
+  // Playwright is the first allowlisted server and ships DISABLED. Connecting
+  // it hands over a browser that is already logged into your accounts, which is
+  // a bigger grant than any single approval in this system. Turn it on
+  // deliberately, and re-pin the version when you do.
+  "mcp": {
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "-y", "@playwright/mcp@0.0.41"],
+      "enabled": false
+    }
+  },
+
+  // ── Permissions: the `companion` preset (ADR-0010, SECURITY §4) ──────────
+  // Rules are evaluated last-match-wins, and anything unmatched defaults to
+  // "ask" — so the order below matters and the file ends with the tightest
+  // rules. This layer is convenience; the non-negotiable denials live in the
+  // policy layer (M1.2), not here.
+  "permission": {
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "lsp": "allow",
+    "skill": "allow",
+    "todowrite": "allow",
+
+    // Writing to disk always surfaces to the user first.
+    "edit": "ask",
+
+    // Network-reaching tools stay off entirely: they would send task text to
+    // third parties (M0.1 audit §8 — exa.ai / parallel.ai).
+    "webfetch": "deny",
+    "websearch": "deny",
+
+    // Spawning subagents is a cost and blast-radius multiplier.
+    "task": "ask",
+
+    // Shell: a small read-only safe-list runs free, everything else asks.
+    // Patterns are matched per command prefix (M0.1 audit §4).
+    "bash": {
+      "*": "ask",
+      "ls": "allow",
+      "pwd": "allow",
+      "cat": "allow",
+      "head": "allow",
+      "tail": "allow",
+      "wc": "allow",
+      "file": "allow",
+      "stat": "allow",
+      "du": "allow",
+      "df": "allow",
+      "which": "allow",
+      "echo": "allow",
+      "date": "allow",
+      "git status": "allow",
+      "git log": "allow",
+      "git diff": "allow",
+      "git show": "allow",
+      "git branch": "allow",
+      "git remote": "allow",
+
+      // Explicitly hostile shapes stay "ask" even if a broader rule above
+      // would have allowed them. The hard denials are enforced in code.
+      "rm": "ask",
+      "sudo": "ask",
+      "chmod": "ask",
+      "chown": "ask",
+      "curl": "ask",
+      "wget": "ask",
+      "ssh": "ask",
+      "scp": "ask",
+      "dd": "ask",
+      "mkfs": "ask"
+    },
+
+    // Working outside the task's directory is always confirmed.
+    "external_directory": "ask"
+  },
+
+  // ── Tools the agent should not have at all ───────────────────────────────
+  "tools": {
+    "webfetch": false,
+    "websearch": false
+  },
+
+  // ── Limits ───────────────────────────────────────────────────────────────
+  "subagent_depth": 1, // subagents cannot spawn subagents
+  "snapshot": true, // keep file snapshots so a task can be undone
+  "compaction": { "auto": true },
+  "tool_output": { "max_lines": 400, "max_bytes": 16384 },
+
+  // Formatters and language servers are for coding sessions; a desktop
+  // companion does not need them, and they add startup cost and file watching.
+  "formatter": false,
+  "lsp": false,
+
+  "logLevel": "INFO"
+}

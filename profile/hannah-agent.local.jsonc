@@ -1,0 +1,117 @@
+{
+  // ─────────────────────────────────────────────────────────────────────────
+  // Hannah profile — LOCAL-ONLY variant (ADR-0007 alternative).
+  //
+  // Same posture as hannah-agent.jsonc, but the agent brain runs on your own
+  // machine through Ollama, so no task content leaves the computer at all.
+  //
+  //   1. ollama serve && ollama pull qwen3-coder:30b
+  //   2. scripts/install-profile.sh --local
+  //   3. HANNAH_AGENT_DISABLE_MODELS_FETCH=1 hannah-agent serve --port 8006
+  //
+  // Trade-off: local models are markedly weaker at long multi-step tool use.
+  // Expect more failed macros and more approval churn than the Anthropic
+  // profile. Judge it on your own hardware before relying on it.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  "model": "ollama/qwen3-coder:30b",
+  "small_model": "ollama/qwen3:4b",
+  "enabled_providers": ["ollama"],
+
+  // The public catalog has no local-Ollama entry (only `ollama-cloud`, which
+  // is a hosted service), so the provider is declared in full here. That also
+  // means this profile needs no catalog fetch at all.
+  "provider": {
+    "ollama": {
+      "name": "Ollama (local)",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1",
+        "apiKey": "ollama", // ignored by Ollama; the SDK requires a value
+        "timeout": 600000 // local generation is slow; 10 min ceiling
+      },
+      "models": {
+        "qwen3-coder:30b": {
+          "name": "Qwen3 Coder 30B",
+          "tool_call": true,
+          "reasoning": false,
+          "limit": { "context": 256000, "output": 16384 }
+        },
+        "qwen3:4b": {
+          "name": "Qwen3 4B",
+          "tool_call": true,
+          "reasoning": false,
+          "limit": { "context": 32768, "output": 4096 }
+        }
+      }
+    }
+  },
+
+  "share": "disabled",
+  "autoupdate": false,
+
+  "server": {
+    "hostname": "127.0.0.1",
+    "port": 8006,
+    "mdns": false,
+    "cors": []
+  },
+
+  // Identical permission posture to the default profile — a weaker model is a
+  // reason for more caution, not less.
+  "permission": {
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "lsp": "allow",
+    "skill": "allow",
+    "todowrite": "allow",
+    "edit": "ask",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "task": "ask",
+    "bash": {
+      "*": "ask",
+      "ls": "allow",
+      "pwd": "allow",
+      "cat": "allow",
+      "head": "allow",
+      "tail": "allow",
+      "wc": "allow",
+      "file": "allow",
+      "stat": "allow",
+      "du": "allow",
+      "df": "allow",
+      "which": "allow",
+      "echo": "allow",
+      "date": "allow",
+      "git status": "allow",
+      "git log": "allow",
+      "git diff": "allow",
+      "git show": "allow",
+      "git branch": "allow",
+      "git remote": "allow",
+      "rm": "ask",
+      "sudo": "ask",
+      "chmod": "ask",
+      "chown": "ask",
+      "curl": "ask",
+      "wget": "ask",
+      "ssh": "ask",
+      "scp": "ask",
+      "dd": "ask",
+      "mkfs": "ask"
+    },
+    "external_directory": "ask"
+  },
+
+  "tools": { "webfetch": false, "websearch": false },
+
+  "subagent_depth": 1,
+  "snapshot": true,
+  "compaction": { "auto": true },
+  "tool_output": { "max_lines": 400, "max_bytes": 16384 },
+  "formatter": false,
+  "lsp": false,
+  "logLevel": "INFO"
+}

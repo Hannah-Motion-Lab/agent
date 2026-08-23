@@ -1,0 +1,4 @@
+{"v":"hannah.v0","taskId":"t_fixture","seq":1,"ts":0,"type":"task.accepted","data":{"title":"reindexar proyectos","mode":"companion","cwd":"/home/user/Downloads","narration":"full"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":2,"ts":0,"type":"task.started","data":{"model":""}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":3,"ts":0,"type":"task.progress","data":{"summary":"starting with hannah-backend"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":4,"ts":0,"type":"task.cancelled","data":{"reason":"user"}}
