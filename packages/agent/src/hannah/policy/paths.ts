@@ -51,6 +51,16 @@ const DENIED_DIRECTORIES = [
 /** Exact files that are denied wherever they live under the home directory. */
 const DENIED_HOME_FILES = [
   "~/.netrc",
+  // Windows: the same secrets live under the profile dir and AppData. `~` resolves to
+  // %USERPROFILE% there (os.homedir()), and comparison is case-insensitive off Linux.
+  "~/AppData/Roaming/Microsoft/Credentials",
+  "~/AppData/Local/Microsoft/Credentials",
+  "~/AppData/Roaming/Microsoft/Protect",
+  "~/AppData/Local/Google/Chrome/User Data",
+  "~/AppData/Local/Microsoft/Edge/User Data",
+  "~/AppData/Roaming/Mozilla/Firefox/Profiles",
+  "~/AppData/Local/BraveSoftware/Brave-Browser/User Data",
+  "~/AppData/Roaming/hannah-agent",
   "~/.npmrc",
   "~/.pypirc",
   "~/.git-credentials",
