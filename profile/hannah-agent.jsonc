@@ -14,7 +14,7 @@
   // ── Models (ADR-0007) ────────────────────────────────────────────────────
   // Requires ANTHROPIC_API_KEY in the environment. For a local-only setup,
   // see the Ollama section in docs/PROFILE.md.
-  "model": "anthropic/claude-opus-5",
+  "model": "anthropic/claude-sonnet-5",
   "small_model": "anthropic/claude-haiku-4-5",
 
   // Only Anthropic is loaded. Every other provider in the catalog stays

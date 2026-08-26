@@ -4,7 +4,7 @@
 #
 #   scripts/install-profile.sh            # Anthropic profile (default)
 #   scripts/install-profile.sh --local    # local-only Ollama profile
-#   scripts/install-profile.sh --openrouter  # OpenRouter / Ox Alpha profile (free, remote)
+#   scripts/install-profile.sh --openrouter  # OpenRouter profile (GLM 5.3 Flash, remote)
 #   scripts/install-profile.sh --force    # replace an existing config
 #   scripts/install-profile.sh --print    # write nothing, dump to stdout
 set -eu

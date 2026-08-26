@@ -482,6 +482,11 @@ export class TaskService {
     if (!task || Protocol.TERMINAL_STATES.has(task.state)) return
 
     if (event.type === "session.next.tool.called") task.stats.toolCalls += 1
+    if (event.type === "hannah.tokens") {
+      // Cumulative per assistant message, so the latest count wins over the sum.
+      const output = Number(event.properties["output"] ?? 0)
+      if (output > task.stats.tokensOut) task.stats.tokensOut = output
+    }
     if (event.type === "session.next.tool.success") {
       const paths = event.properties["outputPaths"]
       if (Array.isArray(paths)) task.stats.filesTouched += paths.length

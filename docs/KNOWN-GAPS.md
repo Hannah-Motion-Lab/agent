@@ -88,6 +88,15 @@ worth keeping intact; the `[TASK:]` protocol text has to be reconciled with
 
 *Trigger.* Before merging any of it. Do not open a PR from the stale tree.
 
+*Update 2026-08-26.* The bridge was rebuilt on the current backend
+(`hannah-backend/src/pipeline/agentBridge.js`, one voice: the persona narrates
+the façade's events). The first task against a real model then exposed a drift
+on *this* side: `translate.ts` expects the runner's `session.next.*` events, but
+`GlobalBus` only carries the v1 message vocabulary (`message.part.updated`,
+`message.updated`), so a task that ran three commands was reported as "the model
+produced no output". `facade/bus-events.ts` now derives the expected events from
+the v1 parts, once per part; covered by `test/hannah/bus-events.test.ts`.
+
 ---
 
 ## Environment and tooling

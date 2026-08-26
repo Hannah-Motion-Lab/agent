@@ -13,6 +13,7 @@ import { AppRuntime, type AppServices } from "@/effect/app-runtime"
 import { InstanceStore } from "@/project/instance-store"
 import { PolicyPresets } from "../policy/presets"
 import type { EnginePort, EngineEvent, PermissionAsk, QuestionAsk } from "./service"
+import { BusEvents } from "./bus-events"
 
 /**
  * Binds the façade's `EnginePort` to the real engine services.
@@ -150,10 +151,15 @@ export function make(run: Runner = defaultRunner): EnginePort {
  * service only exists inside an instance context.
  */
 function subscribeBus(listener: (event: EngineEvent) => void) {
+  // The bus speaks the v1 message vocabulary; the façade translates the runner's
+  // `session.next.*` one. `bus-events.ts` derives the latter from the former.
+  const normalize = BusEvents.normalizer()
   const handler = (event: { payload?: { type?: string; properties?: unknown } }) => {
     const type = event.payload?.type
     if (typeof type !== "string") return
-    listener({ type, properties: (event.payload?.properties ?? {}) as Record<string, unknown> })
+    for (const normalized of normalize({ type, properties: (event.payload?.properties ?? {}) as Record<string, unknown> })) {
+      listener(normalized)
+    }
   }
   GlobalBus.on("event", handler)
   return () => void GlobalBus.off("event", handler)
