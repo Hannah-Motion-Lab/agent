@@ -166,12 +166,17 @@ export function event(input: EngineEvent): Translated | undefined {
 
     case "session.next.tool.called": {
       const tool = str(props.tool) ?? "tool"
+      // `target` is the 80-char label for the HUD pill; `command` is the whole thing, for the
+      // terminal panel, which echoes what the hands run so the person can read it like their
+      // own shell history. Both go through the redactor.
+      const command = isShell(tool) ? str((props.input as Record<string, unknown> | undefined)?.command) : undefined
       return {
         type: "task.tool",
         data: {
           tool,
           status: "started",
           target: PolicyRedact.value(toolTarget(tool, props.input)),
+          ...(command ? { command: PolicyRedact.text(shorten(command, 400)) } : {}),
           summary: TOOL_VERBS[tool] ?? `using ${tool}`,
         },
       }
@@ -179,7 +184,18 @@ export function event(input: EngineEvent): Translated | undefined {
 
     case "session.next.tool.success": {
       const tool = str(props.tool) ?? "tool"
-      return { type: "task.tool", data: { tool, status: "done", summary: TOOL_VERBS[tool] ?? `used ${tool}` } }
+      // The first lines of a command's output, for the same terminal echo. Never the whole
+      // thing: the deliverable travels as `task.output`; this is a glance.
+      const output = str(props.output)
+      return {
+        type: "task.tool",
+        data: {
+          tool,
+          status: "done",
+          ...(output ? { preview: PolicyRedact.text(shorten(output, 600)) } : {}),
+          summary: TOOL_VERBS[tool] ?? `used ${tool}`,
+        },
+      }
     }
 
     case "session.next.tool.failed": {
@@ -254,6 +270,8 @@ function humanizeErrorName(name: string) {
 }
 
 /** A short, redacted description of what a tool is pointed at. */
+const isShell = (tool: string) => tool === "bash" || tool === "shell"
+
 function toolTarget(tool: string, input: unknown): string | undefined {
   if (!input || typeof input !== "object") return undefined
   const record = input as Record<string, unknown>

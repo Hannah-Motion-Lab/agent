@@ -110,7 +110,7 @@ SSE envelope — one JSON object per event:
 | `task.started` | `{ model }` | no |
 | `task.plan` | `{ summary, steps[] }` (when the engine plans first) | yes — one sentence |
 | `task.progress` | `{ summary, detail?, answer? }` — human sentence, **≤120 chars**, throttled ≥5 s per task | selectively (see §6) |
-| `task.tool` | `{ tool, status: "started"\|"done"\|"failed", target?, summary }` | no (HUD only) |
+| `task.tool` | `{ tool, status: "started"\|"done"\|"failed", target?, command?, preview?, summary }` — `command` is the full shell command on `started`, `preview` the first lines of its output on `done` (both redacted); the terminal panel echoes them | no (HUD only) |
 | `task.approval.requested` | `{ approvalId, kind: "shell"\|"edit"\|"delete"\|"network"\|"other", summary, command?, paths?, risk: "low"\|"medium"\|"high", timeoutMs }` | **always** |
 | `task.approval.resolved` | `{ approvalId, decision, by }` | only if denied by timeout |
 | `task.question` | `{ questionId, text, options? }` | **always** |

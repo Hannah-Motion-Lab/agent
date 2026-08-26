@@ -65,9 +65,9 @@ describe("bus event normalizer", () => {
     expect(types(running)).toEqual(["message.part.updated", "session.next.tool.called"])
     expect(running[1]?.properties).toMatchObject({ sessionID: SID, tool: "bash", callID: "call_1", input: { command: "ls" } })
     expect(types(norm(toolPart("running")))).toEqual(["message.part.updated"])
-    const done = norm(toolPart("completed", { outputPaths: ["/tmp/a"] }))
+    const done = norm(toolPart("completed", { outputPaths: ["/tmp/a"], output: "117\n" }))
     expect(types(done)).toEqual(["message.part.updated", "session.next.tool.success"])
-    expect(done[1]?.properties).toMatchObject({ tool: "bash", outputPaths: ["/tmp/a"] })
+    expect(done[1]?.properties).toMatchObject({ tool: "bash", outputPaths: ["/tmp/a"], output: "117\n" })
     expect(types(norm(toolPart("completed", { outputPaths: ["/tmp/a"] })))).toEqual(["message.part.updated"])
   })
 

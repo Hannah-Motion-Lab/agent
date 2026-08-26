@@ -97,7 +97,11 @@ export function normalizer(): Normalizer {
       if (status === "completed" && once(`${partID}:done`)) {
         called() // a fast tool can skip "running" on the bus; the count must not skip it
         const paths = Array.isArray(state.outputPaths) ? state.outputPaths : []
-        out.push({ type: "session.next.tool.success", properties: { sessionID, tool, callID, outputPaths: paths } })
+        const output = str(state.output)
+        out.push({
+          type: "session.next.tool.success",
+          properties: { sessionID, tool, callID, outputPaths: paths, ...(output ? { output } : {}) },
+        })
       }
       if (status === "error" && once(`${partID}:done`)) {
         called()

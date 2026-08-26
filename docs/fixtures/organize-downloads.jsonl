@@ -1,7 +1,7 @@
 {"v":"hannah.v0","taskId":"t_fixture","seq":1,"ts":0,"type":"task.accepted","data":{"title":"ordenar descargas","mode":"companion","cwd":"/home/user/Downloads","macro":"organize-downloads","narration":"full"}}
 {"v":"hannah.v0","taskId":"t_fixture","seq":2,"ts":0,"type":"task.started","data":{"model":""}}
 {"v":"hannah.v0","taskId":"t_fixture","seq":3,"ts":0,"type":"task.plan","data":{"summary":"plan: 3 steps","steps":["look at what is in Downloads","create folders by type","move the files"],"completed":1}}
-{"v":"hannah.v0","taskId":"t_fixture","seq":4,"ts":0,"type":"task.tool","data":{"tool":"bash","status":"started","target":"ls ~/Downloads","summary":"running a command"}}
+{"v":"hannah.v0","taskId":"t_fixture","seq":4,"ts":0,"type":"task.tool","data":{"tool":"bash","status":"started","target":"ls ~/Downloads","command":"ls ~/Downloads","summary":"running a command"}}
 {"v":"hannah.v0","taskId":"t_fixture","seq":5,"ts":0,"type":"task.tool","data":{"tool":"bash","status":"done","summary":"running a command"}}
 {"v":"hannah.v0","taskId":"t_fixture","seq":6,"ts":0,"type":"task.approval.requested","data":{"approvalId":"a_per_1","kind":"shell","summary":"run `mkdir -p ~/Downloads/images`","command":"mkdir -p ~/Downloads/images","risk":"medium","timeoutMs":120000}}
 {"v":"hannah.v0","taskId":"t_fixture","seq":7,"ts":0,"type":"task.approval.resolved","data":{"approvalId":"a_per_1","decision":"allow","by":"hud"}}
