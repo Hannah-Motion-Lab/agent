@@ -770,6 +770,22 @@ describe("engine errors are explained, not swallowed", () => {
     expect(status.error).toContain("missing API key")
   })
 
+  test("a prompt that resolves without any work is FAILED, not completed", async () => {
+    // Seen live the day Ox Alpha was withdrawn: the provider returned 404, the engine
+    // resolved prompt() cleanly, and the façade emitted task.completed {summary:"done"} —
+    // so the persona told the user the job was finished when nothing had happened.
+    const { deps } = make()
+    const { taskId } = await (await call(deps, "POST", "/tasks", CREATE)).json()
+    await Bun.sleep(1)
+    engine.complete() // nothing was ever written, no tool ran
+    await Bun.sleep(5)
+
+    const status = await (await call(deps, "GET", `/tasks/${taskId}`)).json()
+    expect(status.state).toBe("failed")
+    expect(status.error).toContain("no output")
+    expect(audit.entries.map((entry) => entry.event)).toContain("task.failed")
+  })
+
   test("an error with no message still says something useful", async () => {
     const { deps } = make()
     const { taskId } = await (await call(deps, "POST", "/tasks", CREATE)).json()

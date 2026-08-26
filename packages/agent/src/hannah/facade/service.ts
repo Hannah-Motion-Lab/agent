@@ -247,7 +247,20 @@ export class TaskService {
 
       // The engine may already have ended the task (error event, cancel).
       const current = this.store.get(task.id)
-      if (current && !Protocol.TERMINAL_STATES.has(current.state)) {
+      if (current && !Protocol.TERMINAL_STATES.has(current.state) && !didAnyWork(current)) {
+        // The prompt resolved cleanly but the model never produced a token nor called a
+        // tool. That is not a completed task, it is a model that never answered — a dead
+        // key, a retired model id (Ox Alpha's 404 the day it was withdrawn), an empty
+        // credit balance. Reporting it as "completed: done" made the persona tell the user
+        // the job was finished when nothing had happened. Fail loudly instead.
+        current.error = "the model produced no output (check the API key, credits and model id)"
+        this.store.transition(task.id, "failed")
+        this.#emit(task.id, "task.failed", {
+          summary: "the task failed: the model never answered",
+          error: current.error,
+          recoverable: true,
+        })
+      } else if (current && !Protocol.TERMINAL_STATES.has(current.state)) {
         this.store.transition(task.id, "completed")
         this.#emit(task.id, "task.completed", {
           summary: current.lastProgress ?? "done",
@@ -648,3 +661,9 @@ function promptFor(task: Store.Task) {
 
 /** Re-exported so callers do not reach past the façade for policy decisions. */
 export const policy = Policy
+
+/** A task did real work if the model wrote anything or called any tool. */
+function didAnyWork(task: Store.Task): boolean {
+  const st = task.stats
+  return (st?.toolCalls ?? 0) > 0 || (st?.tokensOut ?? 0) > 0 || Boolean(task.answer) || Boolean(task.lastProgress)
+}

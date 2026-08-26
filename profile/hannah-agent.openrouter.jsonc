@@ -1,34 +1,35 @@
 {
   // ─────────────────────────────────────────────────────────────────────────
-  // Hannah profile — OpenRouter / Ox Alpha variant.
+  // Hannah profile — OpenRouter / GLM 5.3 Flash variant.
   //
-  // Same posture as hannah-agent.jsonc, but the agent brain is `stealth/ox-alpha`
-  // served through OpenRouter: an OpenAI-compatible endpoint, free during its
-  // preview, 1M context, tool calling. Chosen because it costs nothing and is
-  // strong enough for multi-step tool use, which the persona's local 7B is not.
+  // Same posture as hannah-agent.jsonc, but the agent brain is `z-ai/glm-5.3-flash`
+  // through OpenRouter: 1M context, tool calling, and cheap ($0.075/M in, $0.25/M
+  // out — a typical task costs a fraction of a cent). It is what the free "Ox Alpha"
+  // stealth preview turned out to be: the day it was revealed (2026-08-26) the
+  // stealth id started returning 404, which is why this profile does not use it.
+  // Strong enough for multi-step tool use, which the persona's local 7B is not.
   //
-  //   1. export OPENROUTER_API_KEY=sk-or-...   (https://openrouter.ai/keys)
+  //   1. export OPENROUTER_API_KEY=sk-or-...   (https://openrouter.ai/keys — add credits)
   //   2. scripts/install-profile.sh --openrouter
   //   3. hannah-agent serve --port 8006
   //
   // ── PRIVACY — read before enabling ───────────────────────────────────────
-  // Ox Alpha is a "stealth" model: the provider is ANONYMOUS, and OpenRouter's
-  // page states that "prompts and completions for this model are retained by
-  // the provider" (not used for training, but retained). Everything a task
-  // touches — file contents, command output, your prompt — reaches that third
-  // party. The `companion` permission preset and the sensitive-path denylist
-  // (packages/agent/src/hannah/policy/paths.ts) limit WHAT a task can read;
-  // they do not change WHERE it goes. For sensitive work use the Ollama profile.
+  // The provider is Z.ai (Zhipu), reached through OpenRouter. Everything a task
+  // touches — file contents, command output, your prompt — leaves the machine
+  // and reaches both. Check OpenRouter's and Z.ai's data policies for the current
+  // retention terms; the `companion` preset and the sensitive-path denylist
+  // (packages/agent/src/hannah/policy/paths.ts) limit WHAT a task can read, they
+  // do not change WHERE it goes. For sensitive work use the Ollama profile.
+  // The account needs credits: without them every task fails at the model.
   //
-  // The model is a preview and may disappear without notice. If it does, this
-  // profile is the only thing to change: swap `model` for another OpenRouter
-  // id (or install the Anthropic profile, hannah-agent.jsonc).
+  // If the model is ever withdrawn, this profile is the only thing to change:
+  // swap `model` for another OpenRouter id (or install hannah-agent.jsonc).
   // ─────────────────────────────────────────────────────────────────────────
 
-  "model": "openrouter/stealth/ox-alpha",
-  // Same model for the cheap slot: it is free, and a second provider would be
-  // a second place the task text goes.
-  "small_model": "openrouter/stealth/ox-alpha",
+  "model": "openrouter/z-ai/glm-5.3-flash",
+  // Same model for the cheap slot: it is cheap enough, and a second provider
+  // would be a second place the task text goes.
+  "small_model": "openrouter/z-ai/glm-5.3-flash",
   "enabled_providers": ["openrouter"],
 
   // The provider comes from the public catalog (models.dev), which already
@@ -49,7 +50,7 @@
     "cors": []
   },
 
-  // Identical permission posture to the default profile. A free remote model
+  // Identical permission posture to the default profile. A cheap remote model
   // is a reason for more caution, not less: every approval is also a decision
   // about what leaves the machine.
   "permission": {
