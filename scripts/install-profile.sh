@@ -4,6 +4,7 @@
 #
 #   scripts/install-profile.sh            # Anthropic profile (default)
 #   scripts/install-profile.sh --local    # local-only Ollama profile
+#   scripts/install-profile.sh --openrouter  # OpenRouter / Ox Alpha profile (free, remote)
 #   scripts/install-profile.sh --force    # replace an existing config
 #   scripts/install-profile.sh --print    # write nothing, dump to stdout
 set -eu
@@ -16,6 +17,7 @@ print_only=0
 for arg in "$@"; do
   case "$arg" in
   --local) source_file="$root/profile/hannah-agent.local.jsonc" ;;
+  --openrouter) source_file="$root/profile/hannah-agent.openrouter.jsonc" ;;
   --force) force=1 ;;
   --print) print_only=1 ;;
   -h | --help)

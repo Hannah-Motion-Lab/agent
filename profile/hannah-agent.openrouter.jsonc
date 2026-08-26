@@ -1,0 +1,110 @@
+{
+  // ─────────────────────────────────────────────────────────────────────────
+  // Hannah profile — OpenRouter / Ox Alpha variant.
+  //
+  // Same posture as hannah-agent.jsonc, but the agent brain is `stealth/ox-alpha`
+  // served through OpenRouter: an OpenAI-compatible endpoint, free during its
+  // preview, 1M context, tool calling. Chosen because it costs nothing and is
+  // strong enough for multi-step tool use, which the persona's local 7B is not.
+  //
+  //   1. export OPENROUTER_API_KEY=sk-or-...   (https://openrouter.ai/keys)
+  //   2. scripts/install-profile.sh --openrouter
+  //   3. hannah-agent serve --port 8006
+  //
+  // ── PRIVACY — read before enabling ───────────────────────────────────────
+  // Ox Alpha is a "stealth" model: the provider is ANONYMOUS, and OpenRouter's
+  // page states that "prompts and completions for this model are retained by
+  // the provider" (not used for training, but retained). Everything a task
+  // touches — file contents, command output, your prompt — reaches that third
+  // party. The `companion` permission preset and the sensitive-path denylist
+  // (packages/agent/src/hannah/policy/paths.ts) limit WHAT a task can read;
+  // they do not change WHERE it goes. For sensitive work use the Ollama profile.
+  //
+  // The model is a preview and may disappear without notice. If it does, this
+  // profile is the only thing to change: swap `model` for another OpenRouter
+  // id (or install the Anthropic profile, hannah-agent.jsonc).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  "model": "openrouter/stealth/ox-alpha",
+  // Same model for the cheap slot: it is free, and a second provider would be
+  // a second place the task text goes.
+  "small_model": "openrouter/stealth/ox-alpha",
+  "enabled_providers": ["openrouter"],
+
+  // The provider comes from the public catalog (models.dev), which already
+  // lists `stealth/ox-alpha`, reads the key from OPENROUTER_API_KEY, and uses
+  // the official OpenRouter SDK — the engine's openrouter plugin adds the
+  // X-Title attribution header on top. Nothing to declare here: the catalog
+  // entry is the source of truth for baseURL, model limits and tool support.
+  // (If the catalog ever drops the model, declare it under "provider" like the
+  // Ollama profile does — see hannah-agent.local.jsonc.)
+
+  "share": "disabled",
+  "autoupdate": false,
+
+  "server": {
+    "hostname": "127.0.0.1",
+    "port": 8006,
+    "mdns": false,
+    "cors": []
+  },
+
+  // Identical permission posture to the default profile. A free remote model
+  // is a reason for more caution, not less: every approval is also a decision
+  // about what leaves the machine.
+  "permission": {
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "lsp": "allow",
+    "skill": "allow",
+    "todowrite": "allow",
+    "edit": "ask",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "task": "ask",
+    "bash": {
+      "*": "ask",
+      "ls": "allow",
+      "pwd": "allow",
+      "cat": "allow",
+      "head": "allow",
+      "tail": "allow",
+      "wc": "allow",
+      "file": "allow",
+      "stat": "allow",
+      "du": "allow",
+      "df": "allow",
+      "which": "allow",
+      "echo": "allow",
+      "date": "allow",
+      "git status": "allow",
+      "git log": "allow",
+      "git diff": "allow",
+      "git show": "allow",
+      "git branch": "allow",
+      "git remote": "allow",
+      "rm": "ask",
+      "sudo": "ask",
+      "chmod": "ask",
+      "chown": "ask",
+      "curl": "ask",
+      "wget": "ask",
+      "ssh": "ask",
+      "scp": "ask",
+      "dd": "ask",
+      "mkfs": "ask"
+    },
+    "external_directory": "ask"
+  },
+
+  "tools": { "webfetch": false, "websearch": false },
+
+  "subagent_depth": 1,
+  "snapshot": true,
+  "compaction": { "auto": true },
+  "tool_output": { "max_lines": 400, "max_bytes": 16384 },
+  "formatter": false,
+  "lsp": false,
+  "logLevel": "INFO"
+}
