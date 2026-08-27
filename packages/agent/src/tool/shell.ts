@@ -290,6 +290,18 @@ const ask = Effect.fn("ShellTool.ask")(function* (ctx: Tool.Context, scan: Scan,
   })
 })
 
+/**
+ * The environment a tool shell inherits, minus the secrets: the model's own API key, the façade
+ * bearer, the engine password, and any *_API_KEY / *_TOKEN / *_SECRET-shaped variable. A task
+ * that runs `env` (or a script that reads it) must not be able to exfiltrate what pays for it.
+ */
+const SECRET_ENV = /(_API_KEY|_TOKEN|_PASSWORD|_PASSWD|_SECRET|_CREDENTIALS?)$|^HANNAH_AGENT_/i
+export function scrubbed(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(env)) if (!SECRET_ENV.test(key)) out[key] = value
+  return out
+}
+
 function cmd(shell: string, command: string, cwd: string, env: NodeJS.ProcessEnv) {
   if (process.platform === "win32" && Shell.ps(shell)) {
     return ChildProcess.make(shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command], {
@@ -420,7 +432,7 @@ export const ShellTool = Tool.define(
         { env: {} },
       )
       return {
-        ...process.env,
+        ...scrubbed(process.env),
         ...extra.env,
       }
     })

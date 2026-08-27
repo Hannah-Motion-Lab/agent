@@ -57,7 +57,10 @@ export function fileSink(directory: string): Sink {
     stream?.end()
     day = today
     fs.mkdirSync(directory, { recursive: true })
-    stream = fs.createWriteStream(path.join(directory, `audit-${today}.jsonl`), { flags: "a" })
+    stream = fs.createWriteStream(path.join(directory, `audit-${today}.jsonl`), { flags: "a", mode: 0o600 })
+    // A full disk or an unwritable directory must not take the process down: an unhandled
+    // 'error' on a stream is fatal in Node. Drop the sink and let the next write reopen.
+    stream.on("error", () => { stream = undefined })
     return stream
   }
 

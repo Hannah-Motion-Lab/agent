@@ -52,6 +52,18 @@ const RULES: ReadonlyArray<Rule> = [
     replace: (m) => `${m.split(/[:=]/)[0].trimEnd()}=[redacted]`,
   },
   {
+    // JSON shapes: "apiKey": "…", "token": "…" — what a settings file or an API response looks like.
+    name: "secret-json-field",
+    match: /"([A-Za-z0-9_]*(?:secret|token|password|passwd|apikey|api_key|access_key|private_key|credentials?)[A-Za-z0-9_]*)"\s*:\s*"[^"\n]{6,}"/gi,
+    replace: (m) => `${m.split(":")[0]}: "[redacted]"`,
+  },
+  {
+    // Provider key prefixes without an assignment around them.
+    name: "provider-key",
+    match: /\b(gsk_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|xai-[A-Za-z0-9]{20,}|sk-or-v1-[A-Za-z0-9]{20,})\b/g,
+    replace: () => "[redacted:api-key]",
+  },
+  {
     name: "url-userinfo",
     match: /\b([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^/\s@]+)@/gi,
     replace: (m) => m.replace(/:([^/\s@]+)@/, ":[redacted]@"),

@@ -72,6 +72,18 @@ const DENIED_HOME_FILES = [
 const DENIED_FILES = ["/etc/shadow", "/etc/gshadow", "/etc/sudoers", "/etc/master.passwd"]
 
 /**
+ * Path shapes denied anywhere: the process environment of any process (API keys live there),
+ * and Hannah's own data directory — settings.json holds every provider key in plaintext and
+ * memory.db the whole conversation history. Matched on the resolved path AND on the raw input,
+ * so a spelling that fails to resolve is still caught.
+ */
+const DENIED_PATTERNS = [
+  /^\/proc\/[^/]+\/(environ|cmdline|maps|mem)$/i,
+  /[\\/]hannah-backend[\\/]data([\\/]|$)/i,
+  /[\\/](memory\.db|ui-token)$/i,
+]
+
+/**
  * Basename patterns denied anywhere on disk. These are the shapes that carry
  * secrets regardless of location — a `.env` inside a project directory is
  * exactly as sensitive as one in `$HOME`.
@@ -101,7 +113,12 @@ function home() {
 }
 
 function expand(pattern: string) {
-  return pattern.startsWith("~/") ? path.join(home(), pattern.slice(2)) : pattern
+  // `~/x`, `~user/x`, `$HOME/x`, `${HOME}/x` — all the spellings a shell would honour.
+  let p = pattern.replace(/^\$\{HOME\}|^\$HOME(?=\/|$)/, home())
+  if (p.startsWith("~/") || p === "~") return path.join(home(), p.slice(2))
+  const other = /^~([a-z_][a-z0-9_-]*)(\/|$)/i.exec(p)
+  if (other) return path.join(path.dirname(home()), other[1]!, p.slice(other[0].length))
+  return p
 }
 
 /** Case-insensitive comparison on platforms with case-insensitive filesystems. */
@@ -148,6 +165,11 @@ export function resolve(input: string, cwd: string): string {
 export function classify(input: string, cwd: string = process.cwd()): Verdict {
   if (!input) return { sensitive: false }
   const resolved = resolve(input, cwd)
+  for (const rule of DENIED_PATTERNS) {
+    if (rule.test(resolved) || rule.test(expand(input))) {
+      return { sensitive: true, reason: "process environment or Hannah's own data", rule: rule.source }
+    }
+  }
   const base = path.basename(resolved)
 
   if (ALLOWED_BASENAMES.some((rule) => rule.test(base))) return { sensitive: false }

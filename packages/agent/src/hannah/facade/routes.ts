@@ -2,6 +2,7 @@ export * as Routes from "./routes"
 
 import { Macros } from "../macros"
 import { Protocol } from "./protocol"
+import { PolicyPresets } from "../policy/presets"
 import type { Store } from "./store"
 import type { TaskService } from "./service"
 
@@ -57,6 +58,12 @@ function clampLimit(raw: string | null, fallback: number, max: number) {
   return Math.min(Math.floor(value), max)
 }
 
+/** The widest preset a client may request; the operator sets it, defaulting to companion. */
+function maxMode(): PolicyPresets.Name {
+  const raw = process.env["HANNAH_AGENT_MAX_MODE"]
+  return PolicyPresets.isName(raw) ? raw : "companion"
+}
+
 export function handle(request: Request, deps: Deps): Response | Promise<Response> {
   const url = new URL(request.url)
   const path = url.pathname.slice(PREFIX.length) || "/"
@@ -68,6 +75,15 @@ export function handle(request: Request, deps: Deps): Response | Promise<Respons
 
   if (!authorized(request, deps.token)) {
     return json({ error: "unauthorized" }, 401, { "www-authenticate": "Bearer" })
+  }
+
+  // Browsers, never. A web page can reach 127.0.0.1:8006 with a "simple" request (text/plain
+  // body, no preflight); the backend is the only client and it sends no Origin. JSON bodies
+  // only, for the same reason: a form or text/plain post is by definition not the backend.
+  if (request.headers.has("origin")) return json({ error: "forbidden" }, 403)
+  if (request.method === "POST" || request.method === "PUT") {
+    const type = request.headers.get("content-type") ?? ""
+    if (!/^application\/json\b/i.test(type)) return json({ error: "content-type must be application/json" }, 415)
   }
 
   if (path === "/events" && request.method === "GET") return events(request, deps)
@@ -122,8 +138,12 @@ export function handle(request: Request, deps: Deps): Response | Promise<Respons
   return json({ error: "not found" }, 404)
 }
 
+/** Largest body the façade accepts (a task prompt plus context; never a file). */
+export const MAX_BODY_BYTES = 256 * 1024
+
 async function body(request: Request): Promise<unknown> {
   const text = await request.text()
+  if (text.length > MAX_BODY_BYTES) return undefined
   if (!text.trim()) return {}
   try {
     return JSON.parse(text)
@@ -138,6 +158,11 @@ async function createTask(request: Request, deps: Deps) {
 
   const parsed = Protocol.parseCreateTask(payload)
   if (!parsed.ok) return json({ error: "invalid request", details: parsed.errors }, 400)
+  // The wire may ask for a preset, but never a wider one than the operator allowed
+  // (HANNAH_AGENT_MAX_MODE, default companion): the caller is a client, not the owner.
+  if (parsed.value.mode && PolicyPresets.wider(parsed.value.mode, maxMode())) {
+    return json({ error: `mode ${parsed.value.mode} is above the operator's maximum (${maxMode()})` }, 403)
+  }
 
   const result = await deps.service.create(parsed.value)
   if (!result.ok) {
@@ -164,6 +189,9 @@ async function resolveApproval(request: Request, deps: Deps, taskId: string, app
     return json({ error: "decision must be allow or deny" }, 400)
   }
   const by = payload.by === "hud" || payload.by === "timeout" ? payload.by : "voice"
+  // `timeout` is the backend telling us silence happened: it can only ever deny. A client
+  // that says "allow, by timeout" is trying to skip the HUD factor with a label.
+  if (by === "timeout" && decision === "allow") return json({ error: "a timeout cannot grant" }, 400)
 
   // A `high`-risk approval may not be granted by voice alone (SECURITY T7):
   // someone else in the room can say "sí". The HUD button is the second factor.
@@ -218,6 +246,7 @@ function events(request: Request, deps: Deps): Response {
 
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | undefined
+  let heartbeat: ReturnType<typeof setInterval> | undefined
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -244,7 +273,7 @@ function events(request: Request, deps: Deps): Response {
 
       // Keep-alive: proxies and idle detection kill silent connections, and a
       // task can legitimately think for minutes without emitting anything.
-      const heartbeat = setInterval(() => send(`: keep-alive ${Date.now()}\n\n`), 15_000)
+      heartbeat = setInterval(() => send(`: keep-alive ${Date.now()}\n\n`), 15_000)
 
       request.signal?.addEventListener("abort", () => {
         clearInterval(heartbeat)
@@ -257,6 +286,9 @@ function events(request: Request, deps: Deps): Response {
       })
     },
     cancel() {
+      // The mounted Request has no signal (see index.ts), so this is the path that actually
+      // runs when the backend drops the stream: without it every reconnection leaked a timer.
+      clearInterval(heartbeat)
       unsubscribe?.()
     },
   })

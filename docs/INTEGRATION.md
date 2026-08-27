@@ -21,8 +21,16 @@
   script in the backend; later: systemd user unit — ROADMAP M4.5). The backend
   never spawns it.
 - **Auth**: the façade requires a bearer token when `HANNAH_AGENT_TOKEN` is set;
-  the backend passes the same value. Localhost-only binding is the first line of
-  defense, the token the second (SECURITY.md §4).
+  the backend passes the same value. The `hannah` launcher generates it into the
+  backend's `.env` when empty and exports the same secret as
+  `HANNAH_AGENT_SERVER_PASSWORD`, so the engine's native API (`/session`, `/config`…)
+  is behind basic auth too. Localhost-only binding is the first line of defense,
+  the token the second (SECURITY.md §4). The façade also refuses requests carrying
+  an `Origin` header (a browser is never a legitimate client) and non-JSON bodies.
+- **Mode ceiling**: a task may request a narrower preset than the operator's
+  `AGENT_MODE`, never a wider one (`HANNAH_AGENT_MAX_MODE`, default `companion`).
+- **Tool shells** never inherit `*_API_KEY`/`*_TOKEN`/`*_SECRET` variables nor
+  `HANNAH_AGENT_*`; `env`/`printenv` are no longer in the always-allowed list.
 - **Health**: backend polls `GET /hannah/v0/health` on boot and surfaces agent
   availability to the frontend (`agent_available` flag in its session state).
 

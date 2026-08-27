@@ -371,3 +371,67 @@ describe("presets are switchable per task", () => {
     }
   })
 })
+
+describe("AUDIT block 2: wider risk tiers and Hannah's own data", () => {
+  test("interpreters, redirection and in-place deletes are high", () => {
+    for (const cmd of [
+      "python3 -c 'import os; os.system(\"rm -rf /\")'",
+      "node -e \"require('fs').rmSync('x')\"",
+      "perl -e 'unlink glob \"*\"'",
+      "echo hi > important.txt",
+      "cat a >> b",
+      "find . -name '*.log' -delete",
+      "truncate -s 0 file",
+      "git reset --hard HEAD~3",
+      "git clean -fdx",
+      "bash -c 'ls'",
+    ]) {
+      expect(PolicyPresets.risk("bash", [cmd])).toBe("high")
+    }
+    expect(PolicyPresets.risk("bash", ["ls -la | wc -l"])).toBe("medium")
+    expect(PolicyPresets.risk("bash", ["cat a 2>&1"])).toBe("medium")
+  })
+
+  test("env dumps left the safe list", () => {
+    expect(PolicyPresets.safeList()).not.toContain("env")
+    expect(PolicyPresets.safeList()).not.toContain("printenv")
+  })
+
+  test("wider() orders the presets", () => {
+    expect(PolicyPresets.wider("trusted-project", "companion")).toBe(true)
+    expect(PolicyPresets.wider("companion", "companion")).toBe(false)
+    expect(PolicyPresets.wider("paranoid", "companion")).toBe(false)
+  })
+
+  test("process environments and hannah-backend/data are denied everywhere", () => {
+    for (const target of [
+      "/proc/self/environ",
+      "/proc/1234/cmdline",
+      `${HOME}/Github/Hannah-Motion/hannah-backend/data/settings.json`,
+      "$HOME/x/hannah-backend/data/memory.db",
+      "${HOME}/y/hannah-backend/data",
+      "../hannah-backend/data/ui-token",
+      "/opt/hannah/memory.db",
+    ]) {
+      expect(PolicyPaths.classify(target, CWD).sensitive).toBe(true)
+    }
+    expect(PolicyPaths.classify("/proc/cpuinfo", CWD).sensitive).toBe(false)
+    expect(PolicyPaths.classify("~otheruser/.ssh/id_rsa", CWD).sensitive).toBe(true)
+  })
+
+  test("JSON fields and provider prefixes are redacted", () => {
+    const out = PolicyRedact.text('{"apiKey": "abcdef123456789", "model": "qwen"} gsk_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234 hf_abcdefghijklmnopqrstuvwxyz')
+    expect(out).not.toContain("abcdef123456789")
+    expect(out).not.toContain("gsk_ABC")
+    expect(out).not.toContain("hf_abc")
+    expect(out).toContain("qwen")
+  })
+})
+
+describe("AUDIT block 2: tool shells do not inherit secrets", () => {
+  test("scrubbed() drops key-shaped variables and keeps the rest", async () => {
+    const { scrubbed } = await import("@/tool/shell")
+    const out = scrubbed({ PATH: "/bin", HOME: "/h", ANTHROPIC_API_KEY: "sk-x", HANNAH_AGENT_TOKEN: "t", GITHUB_TOKEN: "g", MY_SECRET: "s", TERM: "xterm" })
+    expect(Object.keys(out).sort()).toEqual(["HOME", "PATH", "TERM"])
+  })
+})

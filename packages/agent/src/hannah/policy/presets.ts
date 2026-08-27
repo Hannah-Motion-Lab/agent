@@ -16,6 +16,13 @@ import { PolicyMCP } from "./mcp"
 export const NAMES = ["companion", "trusted-project", "paranoid"] as const
 export type Name = (typeof NAMES)[number]
 
+/** Ordered from most to least restrictive: paranoid < companion < trusted-project. */
+const WIDTH: Record<Name, number> = { paranoid: 0, companion: 1, "trusted-project": 2 }
+/** Is `candidate` a wider (more permissive) preset than `ceiling`? */
+export function wider(candidate: Name, ceiling: Name): boolean {
+  return WIDTH[candidate] > WIDTH[ceiling]
+}
+
 export function isName(input: unknown): input is Name {
   return typeof input === "string" && (NAMES as readonly string[]).includes(input)
 }
@@ -41,8 +48,7 @@ const SHELL_SAFE_LIST = [
   "date",
   "uname",
   "whoami",
-  "env",
-  "printenv",
+  // `env`/`printenv` used to be here: they dump the process environment, API keys included.
   "git status",
   "git log",
   "git diff",
@@ -173,8 +179,13 @@ export function risk(permission: string, patterns: readonly string[], metadata?:
   }
   if (permission === "bash") {
     const text = patterns.join(" ")
-    if (/\b(rm|mv|dd|chmod|chown|kill|killall)\b/.test(text)) return "high"
-    if (/\b(curl|wget|ssh|scp|rsync|nc|git push)\b/.test(text)) return "high"
+    if (/\b(rm|mv|dd|chmod|chown|kill|killall|truncate|shred|mkfs)\b/.test(text)) return "high"
+    if (/\b(curl|wget|ssh|scp|rsync|nc|ncat|socat|git push)\b/.test(text)) return "high"
+    // Interpreters and `-c`/`-e` one-liners are unbounded: whatever the regexes above would
+    // catch can be spelled inside them. Same for output redirection and in-place deletes.
+    if (/\b(python[23]?|node|deno|bun|perl|ruby|php|osascript|powershell|pwsh|bash|sh|zsh|eval|exec|source)\b/.test(text)) return "high"
+    if (/(^|[^>])>{1,2}\s*[^&\s]|\|\s*(tee|xargs)\b/.test(text)) return "high"
+    if (/\bfind\b.*\s-(delete|exec)\b|\bgit\s+(reset\s+--hard|clean|checkout\s+--|push\s+--force)/.test(text)) return "high"
     return "medium"
   }
   if (permission === "external_directory") return "high"

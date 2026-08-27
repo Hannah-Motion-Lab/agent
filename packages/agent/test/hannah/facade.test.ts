@@ -797,3 +797,29 @@ describe("engine errors are explained, not swallowed", () => {
     expect(status.error).toContain("not signed in")
   })
 })
+
+describe("AUDIT block 2: the façade only talks to the backend", () => {
+  test("a browser (Origin header) is refused even with the token", async () => {
+    const { deps } = make()
+    const res = await call(deps, "GET", "/history", undefined, { authorization: `Bearer ${deps.token}`, origin: "http://evil.example" })
+    expect(res.status).toBe(403)
+  })
+
+  test("non-JSON bodies are refused", async () => {
+    const { deps } = make()
+    const res = await call(deps, "POST", "/tasks", { prompt: "hi" }, { authorization: `Bearer ${deps.token}`, "content-type": "text/plain" })
+    expect(res.status).toBe(415)
+  })
+
+  test("a requested mode above the operator's maximum is refused", async () => {
+    const { deps } = make()
+    const res = await call(deps, "POST", "/tasks", { prompt: "hi", mode: "trusted-project" }, { authorization: `Bearer ${deps.token}` })
+    expect(res.status).toBe(403)
+  })
+
+  test("a timeout cannot grant an approval", async () => {
+    const { deps } = make()
+    const res = await call(deps, "POST", "/tasks/nope/approvals/whatever", { decision: "allow", by: "timeout" }, { authorization: `Bearer ${deps.token}` })
+    expect(res.status).toBe(400)
+  })
+})
