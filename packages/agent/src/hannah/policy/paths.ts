@@ -76,6 +76,10 @@ const DENIED_FILES = ["/etc/shadow", "/etc/gshadow", "/etc/sudoers", "/etc/maste
  * and Hannah's own data directory — settings.json holds every provider key in plaintext and
  * memory.db the whole conversation history. Matched on the resolved path AND on the raw input,
  * so a spelling that fails to resolve is still caught.
+ *
+ * `hannah-backend` is the directory site/install.sh clones into. A development checkout keeps the
+ * upstream name (`backend/`), which no pattern here can name without denying every unrelated
+ * project's `backend/data` too — see HANNAH_AGENT_DENY_DIRS below.
  */
 const DENIED_PATTERNS = [
   /^\/proc\/[^/]+\/(environ|cmdline|maps|mem)$/i,
@@ -161,6 +165,37 @@ export function resolve(input: string, cwd: string): string {
   return absolute
 }
 
+/**
+ * Extra denied directories for this machine: `HANNAH_AGENT_DENY_DIRS`, a comma-separated list of
+ * absolute paths. Empty and relative entries are skipped — a relative entry would resolve against
+ * whatever cwd the task happens to run in, so it would name a different directory per task.
+ *
+ * This is env-driven rather than hard-coded because the directory *names* differ per layout: the
+ * installed tree has `hannah-backend/`, a development checkout has `backend/`. Hard-coding one of
+ * them is exactly how the `hannah-backend` pattern above came to be silently dead in a checkout,
+ * with settings.json (every provider key, in plaintext) readable by `read` and `bash`. Widening
+ * that pattern is not the alternative: D3 put the workspace root at `/`, so a rule matching a
+ * `backend/data` under any parent would hard-deny legitimate work in unrelated projects, and a
+ * hard deny is unappealable by design.
+ */
+function fromEnv(): string[] {
+  const raw = process.env["HANNAH_AGENT_DENY_DIRS"]
+  if (!raw?.trim()) return []
+  const result: string[] = []
+  for (const entry of raw.split(",")) {
+    const expanded = expand(entry.trim())
+    if (!expanded || !path.isAbsolute(expanded)) continue
+    // Resolved once here so a symlinked entry still matches the realpath `classify` compares.
+    result.push(resolve(expanded, path.sep))
+  }
+  return result
+}
+
+/** Every denied subtree: the built-in list plus whatever this machine added. */
+function deniedDirectories() {
+  return [...DENIED_DIRECTORIES, ...fromEnv()]
+}
+
 /** Decide whether a path is off-limits. `cwd` anchors relative inputs. */
 export function classify(input: string, cwd: string = process.cwd()): Verdict {
   if (!input) return { sensitive: false }
@@ -187,7 +222,7 @@ export function classify(input: string, cwd: string = process.cwd()): Verdict {
     }
   }
 
-  for (const pattern of DENIED_DIRECTORIES) {
+  for (const pattern of deniedDirectories()) {
     const target = expand(pattern)
     if (isInside(resolved, target)) {
       return { sensitive: true, reason: `${pattern} is a protected directory`, rule: pattern }
@@ -200,7 +235,7 @@ export function classify(input: string, cwd: string = process.cwd()): Verdict {
 /** The denylist as data, for documentation and tests. */
 export function rules() {
   return {
-    directories: [...DENIED_DIRECTORIES],
+    directories: deniedDirectories(),
     files: [...DENIED_FILES, ...DENIED_HOME_FILES],
     basenames: DENIED_BASENAMES.map(String),
     exceptions: ALLOWED_BASENAMES.map(String),

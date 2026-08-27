@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import fs from "fs"
 import os from "os"
 import path from "path"
 import { Policy, PolicyCommands, PolicyPaths, PolicyPresets, PolicyRedact } from "@/hannah/policy"
@@ -433,5 +434,101 @@ describe("AUDIT block 2: tool shells do not inherit secrets", () => {
     const { scrubbed } = await import("@/tool/shell")
     const out = scrubbed({ PATH: "/bin", HOME: "/h", ANTHROPIC_API_KEY: "sk-x", HANNAH_AGENT_TOKEN: "t", GITHUB_TOKEN: "g", MY_SECRET: "s", TERM: "xterm" })
     expect(Object.keys(out).sort()).toEqual(["HOME", "PATH", "TERM"])
+  })
+})
+describe("HANNAH_AGENT_DENY_DIRS: directories this machine adds to the denylist", () => {
+  // The compiled-in rule names `hannah-backend/data`, which is what
+  // site/install.sh clones. A development checkout keeps the upstream name
+  // (`backend/data`), so the rule never fired there and settings.json (every
+  // provider key, in plaintext) was readable. The names cannot both be
+  // hard-coded and a `*/backend/data` pattern would hard-deny unrelated
+  // projects under D3's `/` root, so the machine names its own copy instead.
+
+  let root: string
+  let denied: string
+  let sibling: string
+  let saved: string | undefined
+
+  beforeEach(() => {
+    // realpath because classify compares resolved paths and /tmp is a symlink on some systems.
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "hannah-deny-")))
+    denied = path.join(root, "backend", "data")
+    sibling = path.join(root, "backend", "src")
+    fs.mkdirSync(denied, { recursive: true })
+    fs.mkdirSync(sibling, { recursive: true })
+    saved = process.env["HANNAH_AGENT_DENY_DIRS"]
+    process.env["HANNAH_AGENT_DENY_DIRS"] = denied
+  })
+
+  afterEach(() => {
+    if (saved === undefined) delete process.env["HANNAH_AGENT_DENY_DIRS"]
+    else process.env["HANNAH_AGENT_DENY_DIRS"] = saved
+    fs.rmSync(root, { recursive: true, force: true })
+  })
+
+  test("a file inside a listed directory is denied, and the reason names the directory", () => {
+    const verdict = PolicyPaths.classify(path.join(denied, "settings.json"), CWD)
+    expect(verdict.sensitive).toBe(true)
+    if (verdict.sensitive) {
+      expect(verdict.reason).toContain(denied)
+      expect(verdict.rule).toBe(denied)
+    }
+  })
+
+  test("a sibling directory outside the list is left alone", () => {
+    expect(PolicyPaths.classify(path.join(sibling, "index.js"), CWD).sensitive).toBe(false)
+    expect(PolicyPaths.classify(path.join(root, "notes.md"), CWD).sensitive).toBe(false)
+  })
+
+  test("traversal, `~` and symlinks do not get around it", () => {
+    expect(PolicyPaths.classify(`${denied}/../data/settings.json`, CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify(`${sibling}/../data/settings.json`, CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify("settings.json", denied).sensitive).toBe(true)
+
+    // A `~`-anchored entry is expanded the same way the built-in list is, so it
+    // works whether or not the directory exists yet.
+    process.env["HANNAH_AGENT_DENY_DIRS"] = "~/.hannah-provider-keys"
+    expect(PolicyPaths.classify("~/.hannah-provider-keys/settings.json", CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify(path.join(HOME, ".hannah-provider-keys/settings.json"), CWD).sensitive).toBe(true)
+
+    const shortcut = path.join(root, "shortcut")
+    fs.symlinkSync(denied, shortcut)
+    process.env["HANNAH_AGENT_DENY_DIRS"] = denied
+    expect(PolicyPaths.classify(path.join(shortcut, "settings.json"), CWD).sensitive).toBe(true)
+  })
+
+  test("junk in the list is skipped, not thrown", () => {
+    // A relative entry would mean a different directory per task, since classify
+    // anchors relative paths to the task's cwd.
+    process.env["HANNAH_AGENT_DENY_DIRS"] = `,  , backend/data ,${denied},`
+    expect(PolicyPaths.classify(path.join(denied, "settings.json"), CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify(path.join(CWD, "backend/data/settings.json"), CWD).sensitive).toBe(false)
+
+    process.env["HANNAH_AGENT_DENY_DIRS"] = ",,   ,"
+    expect(PolicyPaths.classify(path.join(denied, "settings.json"), CWD).sensitive).toBe(false)
+  })
+
+  test("the installed layout stays denied without any env at all", () => {
+    delete process.env["HANNAH_AGENT_DENY_DIRS"]
+    expect(PolicyPaths.classify(path.join(root, "hannah-backend/data/settings.json"), CWD).sensitive).toBe(true)
+  })
+
+  test("rules() reports what is enforced, not only what is compiled in", () => {
+    expect(PolicyPaths.rules().directories).toContain(denied)
+    delete process.env["HANNAH_AGENT_DENY_DIRS"]
+    expect(PolicyPaths.rules().directories).not.toContain(denied)
+  })
+
+  // The residual, stated out loud so nobody reads the block above as coverage:
+  // nothing compiled in matches a development checkout. It is denied only
+  // because this machine listed it.
+  test("a development checkout is denied only once the machine names it", () => {
+    const settings = path.join(denied, "settings.json")
+    expect(PolicyPaths.classify(settings, CWD).sensitive).toBe(true)
+    delete process.env["HANNAH_AGENT_DENY_DIRS"]
+    expect(PolicyPaths.classify(settings, CWD).sensitive).toBe(false)
+    // memory.db and ui-token were never the hole; DENIED_PATTERNS catches them by basename.
+    expect(PolicyPaths.classify(path.join(denied, "memory.db"), CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify(path.join(denied, "ui-token"), CWD).sensitive).toBe(true)
   })
 })
