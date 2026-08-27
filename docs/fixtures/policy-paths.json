@@ -1,0 +1,271 @@
+{
+  "comment": "GENERATED from packages/agent/src/hannah/policy/paths.ts by scripts/emit-policy-asset.ts. Do not edit by hand: change paths.ts, run `bun run scripts/emit-policy-asset.ts`, commit the diff.",
+  "version": 1,
+  "source": "packages/agent/src/hannah/policy/paths.ts",
+  "generator": "scripts/emit-policy-asset.ts",
+  "denyDirsEnv": "HANNAH_AGENT_DENY_DIRS",
+  "directories": [
+    "~/.ssh",
+    "~/.gnupg",
+    "~/.aws",
+    "~/.config/gcloud",
+    "~/.azure",
+    "~/.kube",
+    "~/.docker",
+    "~/.local/share/keyrings",
+    "~/.gnome2/keyrings",
+    "~/.password-store",
+    "~/Library/Keychains",
+    "~/.mozilla",
+    "~/.config/google-chrome",
+    "~/.config/chromium",
+    "~/.config/BraveSoftware",
+    "~/.config/microsoft-edge",
+    "~/Library/Application Support/Google/Chrome",
+    "~/Library/Application Support/Firefox",
+    "/etc/ssh",
+    "/etc/sudoers.d",
+    "/root",
+    "~/.local/share/hannah-agent",
+    "~/.config/hannah-agent"
+  ],
+  "files": [
+    "/etc/shadow",
+    "/etc/gshadow",
+    "/etc/sudoers",
+    "/etc/master.passwd",
+    "~/.netrc",
+    "~/AppData/Roaming/Microsoft/Credentials",
+    "~/AppData/Local/Microsoft/Credentials",
+    "~/AppData/Roaming/Microsoft/Protect",
+    "~/AppData/Local/Google/Chrome/User Data",
+    "~/AppData/Local/Microsoft/Edge/User Data",
+    "~/AppData/Roaming/Mozilla/Firefox/Profiles",
+    "~/AppData/Local/BraveSoftware/Brave-Browser/User Data",
+    "~/AppData/Roaming/hannah-agent",
+    "~/.npmrc",
+    "~/.pypirc",
+    "~/.git-credentials",
+    "~/.bash_history",
+    "~/.zsh_history"
+  ],
+  "patterns": [
+    {
+      "source": "^\\/proc\\/[^/]+\\/(environ|cmdline|maps|mem)$",
+      "flags": "i"
+    },
+    {
+      "source": "[\\\\/]hannah-backend[\\\\/]data([\\\\/]|$)",
+      "flags": "i"
+    },
+    {
+      "source": "[\\\\/](memory\\.db|ui-token)$",
+      "flags": "i"
+    }
+  ],
+  "basenames": [
+    {
+      "source": "^\\.env$",
+      "flags": "i"
+    },
+    {
+      "source": "^\\.env\\..+",
+      "flags": "i"
+    },
+    {
+      "source": "^id_[a-z0-9]+$",
+      "flags": "i"
+    },
+    {
+      "source": "^.*\\.pem$",
+      "flags": "i"
+    },
+    {
+      "source": "^.*\\.pfx$",
+      "flags": "i"
+    },
+    {
+      "source": "^.*\\.p12$",
+      "flags": "i"
+    },
+    {
+      "source": "^.*\\.keystore$",
+      "flags": "i"
+    },
+    {
+      "source": "^credentials\\.json$",
+      "flags": "i"
+    },
+    {
+      "source": "^service-account.*\\.json$",
+      "flags": "i"
+    },
+    {
+      "source": "^\\.htpasswd$",
+      "flags": "i"
+    }
+  ],
+  "exceptions": [
+    {
+      "source": "^id_[a-z0-9]+\\.pub$",
+      "flags": "i"
+    },
+    {
+      "source": "^\\.env\\.example$",
+      "flags": "i"
+    },
+    {
+      "source": "^\\.env\\.sample$",
+      "flags": "i"
+    },
+    {
+      "source": "^\\.env\\.template$",
+      "flags": "i"
+    }
+  ],
+  "golden": [
+    {
+      "path": "~/.ssh/id_rsa",
+      "sensitive": true,
+      "reason": "\"id_rsa\" is a credential-bearing filename",
+      "rule": "/^id_[a-z0-9]+$/i",
+      "why": "the private half of a key pair: the exact read R2 exists to stop a watch from making"
+    },
+    {
+      "path": "~/.ssh/id_ed25519.pub",
+      "sensitive": false,
+      "why": "the public half is not a secret, and the exception fires before the ~/.ssh directory rule"
+    },
+    {
+      "path": "/srv/keys/id_rsa",
+      "sensitive": true,
+      "reason": "\"id_rsa\" is a credential-bearing filename",
+      "rule": "/^id_[a-z0-9]+$/i",
+      "why": "a key outside ~/.ssh is denied by basename, wherever somebody copied it to"
+    },
+    {
+      "path": "~/Projects/demo/.env",
+      "sensitive": true,
+      "reason": "\".env\" is a credential-bearing filename",
+      "rule": "/^\\.env$/i",
+      "why": "a project .env carries the same keys as one in $HOME"
+    },
+    {
+      "path": "~/Projects/demo/.env.production",
+      "sensitive": true,
+      "reason": "\".env.production\" is a credential-bearing filename",
+      "rule": "/^\\.env\\..+/i",
+      "why": "the suffixed shapes (.env.local, .env.production) are the ones people actually deploy"
+    },
+    {
+      "path": "~/Projects/demo/.env.example",
+      "sensitive": false,
+      "why": "the committed template holds placeholders; denying it would deny reading half the repos on disk"
+    },
+    {
+      "path": "/srv/certs/server.pem",
+      "sensitive": true,
+      "reason": "\"server.pem\" is a credential-bearing filename",
+      "rule": "/^.*\\.pem$/i",
+      "why": "private key material by extension, anywhere on disk"
+    },
+    {
+      "path": "/proc/self/environ",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "^\\/proc\\/[^/]+\\/(environ|cmdline|maps|mem)$",
+      "why": "every provider key of every running process, and the one rule that also matches the raw input"
+    },
+    {
+      "path": "~/Projects/demo/memory.db",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "[\\\\/](memory\\.db|ui-token)$",
+      "why": "the whole conversation history, denied by basename wherever the backend put it"
+    },
+    {
+      "path": "~/Projects/demo/ui-token",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "[\\\\/](memory\\.db|ui-token)$",
+      "why": "the HUD bearer token, denied by basename for the same reason"
+    },
+    {
+      "path": "~/hannah-backend/data/settings.json",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "[\\\\/]hannah-backend[\\\\/]data([\\\\/]|$)",
+      "why": "the installed layout: every provider key in plaintext, denied by the path pattern"
+    },
+    {
+      "path": "/opt/hannah-motion-lab/backend/data/settings.json",
+      "denyDirs": "/opt/hannah-motion-lab/backend/data",
+      "sensitive": true,
+      "reason": "/opt/hannah-motion-lab/backend/data is a protected directory",
+      "rule": "/opt/hannah-motion-lab/backend/data",
+      "why": "the development layout (B2): denied only because the machine named it in the env var"
+    },
+    {
+      "path": "/opt/hannah-motion-lab/backend/data/settings.json",
+      "sensitive": false,
+      "why": "the residual, stated out loud: with nothing in the env var, no compiled-in rule covers a checkout named backend/"
+    },
+    {
+      "path": "/etc/shadow",
+      "sensitive": true,
+      "reason": "/etc/shadow holds credentials",
+      "rule": "/etc/shadow",
+      "why": "an absolute denied file, so the DENIED_FILES arm is covered too"
+    },
+    {
+      "path": "~/.netrc",
+      "sensitive": true,
+      "reason": "~/.netrc holds credentials",
+      "rule": "~/.netrc",
+      "why": "a home-relative denied file, the DENIED_HOME_FILES arm"
+    },
+    {
+      "path": "~/.aws/credentials",
+      "sensitive": true,
+      "reason": "~/.aws is a protected directory",
+      "rule": "~/.aws",
+      "why": "a denied directory that is not ~/.ssh, so one rule failing is visible"
+    },
+    {
+      "path": "~/Projects/demo/README.md",
+      "sensitive": false,
+      "why": "ordinary source tree: a watch on a repo must stay possible"
+    },
+    {
+      "path": "~/Projects/demo/src/train.py",
+      "sensitive": false,
+      "why": "the training script the user asks Hannah to watch"
+    },
+    {
+      "path": "~/Projects/demo/checkpoints/epoch-12.pt",
+      "sensitive": false,
+      "why": "R2 watches checkpoint mtime; denying it would kill the rung"
+    },
+    {
+      "path": "~/Projects/demo/backend/src/index.js",
+      "sensitive": false,
+      "why": "a sibling of a denied data/ directory stays readable"
+    },
+    {
+      "path": "/opt/hannah-motion-lab/backend/data/../logs/train.log",
+      "denyDirs": "/opt/hannah-motion-lab/backend/data",
+      "sensitive": false,
+      "why": "the env entry denies its subtree and nothing above it, with traversal normalised first"
+    },
+    {
+      "path": "/var/log/training.log",
+      "sensitive": false,
+      "why": "a system log outside home: R3 tails these"
+    },
+    {
+      "path": "~/Downloads/report.pdf",
+      "sensitive": false,
+      "why": "an ordinary document, the macro catalog's own working ground"
+    }
+  ]
+}

@@ -9,6 +9,10 @@
 > Canonical event streams for backend tests: [`docs/fixtures/`](fixtures/) —
 > generated from the real façade, not hand-written
 > (`HANNAH_WRITE_FIXTURES=1 bun test test/hannah/fixtures.test.ts`).
+> The sensitive-path denylist is pinned beside them as
+> [`policy-paths.json`](fixtures/policy-paths.json), generated from
+> `policy/paths.ts` (`bun run scripts/emit-policy-asset.ts`) so a consumer in
+> another language classifies paths against this table instead of a second copy.
 
 ## 1. Topology & lifecycle
 
@@ -433,6 +437,9 @@ sequenceDiagram
   disconnect, redaction, audit contents. The engine is faked there so the
   contract runs with no model; `engine-adapter.test.ts` covers the real-engine
   binding separately, and `fixtures.test.ts` regenerates `docs/fixtures/`.
+- `policy-asset.test.ts` holds `docs/fixtures/policy-paths.json` byte-identical
+  to what `scripts/emit-policy-asset.ts` emits now, and re-decides every golden
+  case in it — a denylist rule added without regenerating fails there.
 - Backend side (P2): mock façade server (recorded SSE fixtures) so backend unit
   tests run with no engine — keeps backend's "works with sidecar down" rule.
 - A `docs/fixtures/` set of canonical event streams (JSONL) shared by both.

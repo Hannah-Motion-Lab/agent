@@ -165,6 +165,9 @@ export function resolve(input: string, cwd: string): string {
   return absolute
 }
 
+/** The variable `fromEnv` reads. Named once so `rules()` can hand it to a consumer verbatim. */
+const DENY_DIRS_ENV = "HANNAH_AGENT_DENY_DIRS"
+
 /**
  * Extra denied directories for this machine: `HANNAH_AGENT_DENY_DIRS`, a comma-separated list of
  * absolute paths. Empty and relative entries are skipped — a relative entry would resolve against
@@ -179,7 +182,7 @@ export function resolve(input: string, cwd: string): string {
  * hard deny is unappealable by design.
  */
 function fromEnv(): string[] {
-  const raw = process.env["HANNAH_AGENT_DENY_DIRS"]
+  const raw = process.env[DENY_DIRS_ENV]
   if (!raw?.trim()) return []
   const result: string[] = []
   for (const entry of raw.split(",")) {
@@ -232,13 +235,34 @@ export function classify(input: string, cwd: string = process.cwd()): Verdict {
   return { sensitive: false }
 }
 
-/** The denylist as data, for documentation and tests. */
+/**
+ * A regular expression as data. `JSON.stringify(/^\.env$/i)` is `{}`: a rule emitted as a bare
+ * RegExp disappears from a generated asset silently, with no error anywhere, so the source and the
+ * flags are carried explicitly instead.
+ */
+export type RegexRule = { readonly source: string; readonly flags: string }
+
+const asData = (rule: RegExp): RegexRule => ({ source: rule.source, flags: rule.flags })
+
+/**
+ * The denylist as data, for documentation, tests, and the generated asset
+ * `docs/fixtures/policy-paths.json` that the sense sidecar classifies against (VIGILANCE R2).
+ *
+ * `directories` is what this machine enforces, env included — the caller that wants to know what is
+ * actually denied here must not have to remember to add the env list itself. The asset ships
+ * `builtinDirectories` and `envVar` instead: freezing one machine's `HANNAH_AGENT_DENY_DIRS` into a
+ * committed file would deny those directories on every other machine and leave that machine's real
+ * ones unlisted, which is worse than both halves of the trade.
+ */
 export function rules() {
   return {
+    envVar: DENY_DIRS_ENV,
+    builtinDirectories: [...DENIED_DIRECTORIES],
     directories: deniedDirectories(),
     files: [...DENIED_FILES, ...DENIED_HOME_FILES],
-    basenames: DENIED_BASENAMES.map(String),
-    exceptions: ALLOWED_BASENAMES.map(String),
+    patterns: DENIED_PATTERNS.map(asData),
+    basenames: DENIED_BASENAMES.map(asData),
+    exceptions: ALLOWED_BASENAMES.map(asData),
   }
 }
 
