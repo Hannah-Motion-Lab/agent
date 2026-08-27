@@ -182,6 +182,15 @@ describe("ssh carries a command line to the far end", () => {
     ["a nested shell", "ssh host sh -c 'rm -rf /'", "rm-rf-root"],
     ["a nested shell, quoted whole", `ssh host "sh -c 'rm -rf /'"`, "rm-rf-root"],
     ["a device write", "ssh host dd if=/dev/zero of=/dev/sda", "dd-to-device"],
+    // `--` ends option parsing. Read as the command word it matched nothing, so
+    // one separator turned every rule above back off.
+    ["an end-of-options marker", "ssh host -- sudo reboot", "command:sudo"],
+    ["an end-of-options marker, argument rule", "ssh host -- rm -rf /", "rm-rf-root"],
+    // ProxyCommand and LocalCommand run HERE, not there. The remote half of the
+    // line can be perfectly innocent, which is what makes the shape worth having.
+    ["a local ProxyCommand", "ssh -o ProxyCommand='rm -rf /' host ls", "rm-rf-root"],
+    ["a local ProxyCommand, attached", "ssh -oProxyCommand='sudo reboot' host", "command:sudo"],
+    ["a local LocalCommand", "ssh -o LocalCommand='rm -rf /' host ls", "rm-rf-root"],
   ]
 
   test.each(caught)("catches %s", (_label, command, rule) => {
@@ -214,6 +223,11 @@ describe("ssh carries a command line to the far end", () => {
     "ssh host rm -rf node_modules",
     "ssh host rm -rf /srv/app/dist",
     "rsync -av -e ssh ./src host:/dst", // scp and rsync stay uncovered on purpose
+    "ssh -o BatchMode=yes -o ControlMaster=auto host ls", // ordinary -o values are not commands
+    'ssh -o ProxyCommand="ssh jump nc %h %p" host ls', // the textbook ProxyCommand, and harmless
+    "ssh host -- ls -la", // the marker alone is not suspicious
+    "git commit -- src/x.js", // `--` outside ssh keeps meaning what it meant
+    "ls -- /tmp",
   ]
 
   test.each(clean)("still allows %s", (command) => {

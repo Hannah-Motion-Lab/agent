@@ -242,6 +242,16 @@ function* fragments(input: string, depth = 0): Generator<string> {
       while (j < tokens.length && tokens[j].startsWith("-")) {
         const flag = tokens[j]
         j++
+        // `ProxyCommand` and `LocalCommand` run on THIS machine: ssh executes
+        // them itself to open (or to follow up) the connection. They are the one
+        // part of an ssh line that is local execution, so they are scanned even
+        // when the line carries no remote command at all, which is exactly the
+        // shape that hides them: `ssh -o ProxyCommand='rm -rf /' host ls` read
+        // as a harmless remote `ls`.
+        const attached = flag.length > 2 && flag.startsWith("-o") ? flag.slice(2) : undefined
+        const separate = flag === "-o" && j < tokens.length ? tokens[j] : undefined
+        const local = /^(?:proxycommand|localcommand)=([\s\S]+)$/i.exec(attached ?? separate ?? "")
+        if (local) yield* fragments(local[1], depth + 1)
         if (SSH_VALUE_FLAGS.test(flag) && j < tokens.length) j++
       }
       // The first non-flag token is the destination (`user@host` or a config
@@ -264,6 +274,11 @@ function* fragments(input: string, depth = 0): Generator<string> {
 function commandWord(tokens: readonly string[]): string | undefined {
   for (const token of tokens) {
     if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) continue // FOO=bar cmd
+    // `--` ends option parsing and is not the command. Skipping it matters most
+    // where a fragment *starts* with it: `ssh host -- sudo reboot` hands the
+    // remote arm `-- sudo reboot`, and reading `--` as the command word made the
+    // whole line scan clean.
+    if (token === "--") continue
     if (token === "command" || token === "builtin" || token === "exec" || token === "nohup" || token === "time") continue
     // Use the basename so /usr/bin/sudo and ./sudo are both caught.
     return token.replace(/^.*\//, "")
@@ -303,8 +318,11 @@ export function scan(input: string): Finding[] {
     // Argument rules run against the tokens from the command word onward.
     // Only the *leading* `FOO=bar` prefix is an env assignment — dropping every
     // `key=value` token would also eat `dd if=… of=/dev/sda`.
+    // The leading `--` is skipped here too, and not only in `commandWord`: the
+    // argument rules index from `t[0]`, so `-- rm -rf /` would fail every one of
+    // them while looking scanned.
     let start = 0
-    while (start < tokens.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[start])) start++
+    while (start < tokens.length && (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tokens[start]) || tokens[start] === "--")) start++
     const normalized = tokens.slice(start)
     if (normalized.length) {
       normalized[0] = normalized[0].replace(/^.*\//, "")
