@@ -12,7 +12,9 @@ import { HannahEnv } from "../env"
  * autonomous mode is an OS sandbox (ADR-pending, M4.1). What this module buys
  * is that a confused or injected model cannot reach `rm -rf ~`, `curl | sh`,
  * or `sudo` through the ordinary phrasings — including the indirection shapes
- * SECURITY §7 lists (`bash -c`, heredocs, `xargs`, `find -exec`).
+ * SECURITY §7 lists (`bash -c`, heredocs, `xargs`, `find -exec`) and `ssh`,
+ * which the checklist does not name and which hid an entire remote command
+ * line behind a command word of `ssh`.
  */
 
 export type Finding = {
@@ -109,6 +111,19 @@ const PIPE_TO_SHELL = /\b(curl|wget|fetch)\b[^|;&\n]*\|\s*(sudo\s+)?(ba|z|k|da)?
 /** Shells that take a command string in an argument. */
 const SHELL_C = /^(sh|bash|zsh|ksh|dash|fish|busybox|env)$/
 
+/**
+ * ssh options that take their value as the *following* token. Everything else
+ * starting with `-` is either a boolean flag (`-t`, `-N`, `-4`) or the attached
+ * form of one of these (`-p2222`, `-oBatchMode=yes`), which carries its value
+ * inside the token and consumes nothing.
+ *
+ * Erring on the eager side is the expensive mistake: skipping one token too
+ * many eats the destination, the remote command shifts left, and `rm -rf /`
+ * arrives as `-rf /`, which matches no rule at all. So only the exact
+ * two-character forms consume.
+ */
+const SSH_VALUE_FLAGS = /^-[bcDEeFIiJLlmOopQRSWw]$/
+
 /** Where a new command can begin inside a compound line. */
 const SEPARATORS = /(?:\|\||&&|[;|&\n]|\$\(|`)/
 
@@ -151,8 +166,8 @@ export function tokenize(input: string): string[] {
 /**
  * Yield every fragment that will be executed as a command line, recursively:
  * the line itself, each `;`/`&&`/`|` segment, the string argument of `sh -c`,
- * the body of a heredoc, whatever `xargs` or `find -exec` will run, and the
- * inside of `$(…)` / backtick substitutions.
+ * the body of a heredoc, whatever `xargs` or `find -exec` will run, the remote
+ * command handed to `ssh`, and the inside of `$(…)` / backtick substitutions.
  */
 function* fragments(input: string, depth = 0): Generator<string> {
   if (depth > 6 || !input.trim()) return
@@ -196,6 +211,43 @@ function* fragments(input: string, depth = 0): Generator<string> {
         if (/^-(I|i|n|P|L|s|d|E|a)$/.test(flag) && j < tokens.length) j++
       }
       const rest = tokens.slice(j)
+      if (rest.length) yield* fragments(rest.join(" "), depth + 1)
+    }
+
+    // `ssh host rm -rf /` — the payload runs on the far end, but the agent is
+    // still the thing that caused it to run, so it goes through the same rules.
+    //
+    // DECISION: the remote payload is scanned as a full command line, so the
+    // argument-sensitive rules judge REMOTE arguments against a LOCAL list.
+    // That is deliberate and it is bounded to the rules whose arguments are
+    // universal rather than personal: `rm -rf /`, `dd of=/dev/sda`,
+    // `chmod 777 /etc` name system roots that mean the same catastrophic thing
+    // on any Unix host, so the false positives are shapes worth refusing
+    // anyway. The sensitive-path denylist is deliberately NOT extended out
+    // here: `~/.aws` over there is somebody else's directory, and a deny at
+    // this layer is unappealable, so classifying every remote path against
+    // this machine's secrets would refuse ordinary remote work with no way to
+    // say yes. (Policy.evaluate tokenizes the raw line for that layer already,
+    // so `ssh host cat ~/.ssh/id_rsa` was denied long before this arm existed;
+    // recursing here neither adds nor removes that.) The cost of drawing the
+    // line where it is drawn is real and accepted: `ssh deploy sudo systemctl
+    // restart nginx` is now refused outright.
+    //
+    // `scp` and `rsync` stay uncovered. Neither carries a remote command in a
+    // position that can be parsed with this much confidence (rsync hides one
+    // behind `-e` and `--rsync-path`, scp has none at all), and a half-parsed
+    // arm that skips the wrong token denies file copies for no benefit.
+    if (token.replace(/^.*\//, "") === "ssh") {
+      let j = i + 1
+      while (j < tokens.length && tokens[j].startsWith("-")) {
+        const flag = tokens[j]
+        j++
+        if (SSH_VALUE_FLAGS.test(flag) && j < tokens.length) j++
+      }
+      // The first non-flag token is the destination (`user@host` or a config
+      // alias); everything after it is the remote command. Nothing after it is
+      // an interactive login, which has no payload to scan.
+      const rest = tokens.slice(j + 1)
       if (rest.length) yield* fragments(rest.join(" "), depth + 1)
     }
 

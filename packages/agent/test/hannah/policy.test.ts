@@ -159,6 +159,91 @@ describe("danger commands", () => {
   })
 })
 
+// `ssh host …` hands a whole command line to another machine. fragments() had
+// no arm for it, so the command word was "ssh", the payload was never read, and
+// every case in the first table below returned zero findings.
+describe("ssh carries a command line to the far end", () => {
+  const caught = [
+    ["a bare destination", "ssh host rm -rf /", "rm-rf-root"],
+    ["privilege escalation", "ssh host sudo reboot", "command:sudo"],
+    ["a disk format", "ssh host mkfs.ext4 /dev/sda", "command:mkfs.ext4"],
+    ["flags that take a value", "ssh -p 2222 -o StrictHostKeyChecking=no user@host sudo reboot", "command:sudo"],
+    // The attached form carries its value inside the token. Skipping the next
+    // token anyway would eat the destination, leaving a remote command of
+    // "-rf /", whose first token is not `rm` and which matches no rule at all.
+    ["an attached flag value", "ssh -p2222 host rm -rf /", "rm-rf-root"],
+    // The mirror image: `-l` must consume "root", or the destination reads as
+    // "root" and the remote command as "host rm -rf /", which also matches
+    // nothing. Both directions of the skip are pinned.
+    ["a value that could pass for a destination", "ssh -l root host rm -rf /", "rm-rf-root"],
+    // Already caught before the ssh arm, incidentally: the `sh -c` arm fires on
+    // a bare `sh` token wherever it sits on the line. The next case is the one
+    // that needed the recursion, because quoting hides `sh` inside one token.
+    ["a nested shell", "ssh host sh -c 'rm -rf /'", "rm-rf-root"],
+    ["a nested shell, quoted whole", `ssh host "sh -c 'rm -rf /'"`, "rm-rf-root"],
+    ["a device write", "ssh host dd if=/dev/zero of=/dev/sda", "dd-to-device"],
+  ]
+
+  test.each(caught)("catches %s", (_label, command, rule) => {
+    expect(PolicyCommands.scan(command).map((finding) => finding.rule)).toContain(rule)
+  })
+
+  // The price of the fix, stated rather than discovered later: the argument
+  // rules were written about this machine and now judge the far end too, and a
+  // deny at this layer cannot be approved by anyone.
+  const nowRefused = [
+    // `/opt` may well be a scratch mount over there. The rule cannot tell.
+    ["ssh host rm -rf /opt", "rm-rf-root"],
+    // Ordinary deployment work. Refused from here on, with no appeal.
+    ["ssh deploy sudo systemctl restart nginx", "command:sudo"],
+    ["ssh -t admin@router sudo reboot", "command:sudo"],
+  ]
+
+  test.each(nowRefused)("now refuses %s, which used to pass", (command, rule) => {
+    expect(PolicyCommands.scan(command).map((finding) => finding.rule)).toContain(rule)
+  })
+
+  const clean = [
+    "ssh host ls -la",
+    "ssh host git status",
+    "ssh host", // an interactive login carries no payload
+    "ssh -T git@github.com", // GitHub's auth check, an everyday shape
+    "ssh -l deploy prod-web ls -la", // the destination sits behind a flag value
+    "ssh -oBatchMode=yes -p 2222 deploy@prod tail -f /var/log/app.log",
+    "ssh -N -L 8080:localhost:80 jump", // a tunnel: -L eats its value, nothing follows the destination
+    "ssh host rm -rf node_modules",
+    "ssh host rm -rf /srv/app/dist",
+    "rsync -av -e ssh ./src host:/dst", // scp and rsync stay uncovered on purpose
+  ]
+
+  test.each(clean)("still allows %s", (command) => {
+    expect(PolicyCommands.isDangerous(command)).toBe(false)
+  })
+
+  test("a remote danger command is denied through the permission path too", () => {
+    const command = "ssh host sudo reboot"
+    const request = { cwd: CWD, roots: ["/"], permission: "bash", patterns: [command], metadata: { command } }
+    const decision = Policy.evaluate(request)
+    expect(decision.action).toBe("deny")
+    if (decision.action === "deny") {
+      expect(decision.layer).toBe("danger-command")
+      expect(decision.rule).toBe("command:sudo")
+    }
+  })
+
+  test("a remote path is still judged by the local denylist, exactly as before", () => {
+    // Not a consequence of the ssh arm: Policy.evaluate tokenizes the raw line
+    // for the sensitive-path layer, so a remote path whose name collides with a
+    // local secret was already denied. Asserted here so the shape is visible
+    // next to the decision that deliberately did not extend it.
+    const command = "ssh host cat ~/.ssh/id_rsa"
+    const request = { cwd: CWD, roots: ["/"], permission: "bash", patterns: [command], metadata: { command } }
+    const decision = Policy.evaluate(request)
+    expect(decision.action).toBe("deny")
+    if (decision.action === "deny") expect(decision.layer).toBe("sensitive-path")
+  })
+})
+
 describe("hard policy decisions", () => {
   const base = { cwd: CWD, roots: ["/"] as const }
 
