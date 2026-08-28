@@ -2,7 +2,9 @@
 
 > Status: opened 2026-08-22 after M3.4; #4 and #12 closed in M3.6 the same day.
 > #16–#21 added 2026-08-27 by P5.0/P5.1 (the watches — see ROADMAP Phase 5);
-> #18 closed the same day.
+> #18 closed the same day. #22 and #23 added 2026-08-27 by the **independent
+> verification of P5.1**, which found thirteen defects, three of them in claims
+> already made by a commit message, a test title or the roadmap.
 > Reviewed at every phase boundary; an entry leaves only when it is closed or
 > explicitly accepted.
 
@@ -37,6 +39,8 @@ where the work is knowingly incomplete.
 | [19](#19) | The P5.1 exit demo is not a committed trial | Nothing | ~4 h | Before P5.2 adds acting to it |
 | [20](#20) | The trip inbox is in the backend, not the sidecar | Contract | ~1 d | A second backend, or a second HUD host |
 | [21](#21) | P5.1 shipped without ADR-0013 and without SECURITY T9–T12 | Nothing | ~3 h | Before P5.2 changes the façade contract |
+| [22](#22) | A watched path is still classified by name, not by inode | Design | ~1 d | If the policy model ever moves off paths |
+| [23](#23) | The backend ignores the sidecar's SSE `boot=` id | Nothing | ~2 h | Before a watchId can outlive a sidecar restart |
 
 ---
 
@@ -294,6 +298,13 @@ Nothing here is a defect in what shipped. They are the edges the watch primitive
 was built up to and deliberately stopped at, plus one thing its own milestone
 asked for and did not get.
 
+The last two arrived differently and it is worth saying how: P5.1 was **verified
+independently after it was called done**, and the verification found thirteen
+defects — among them a trip narrated to a stranger and a denylist a symlink
+walked past. Those were fixed, not filed. #22 and #23 are what the fixes
+knowingly left open, written down at the moment they were understood rather than
+after somebody else trips over them, which is the whole point of this file.
+
 ### 16
 **R0 is not implemented.** The cheapest and only *certain* rung — the exit code
 of a wrapper Hannah started — is absent from the ladder. Not an oversight: in an
@@ -361,6 +372,23 @@ and P5.5 have to use those exact names or the rules are silently dead, which is
 precisely how the `hannah-backend/data` pattern came to be dead in a development
 checkout (VIGILANCE B2).
 
+*The sense-side half, and what it depends on.* The sidecar does not carry a copy
+of any of this: `sidecar/sense/paths.py` reads `docs/fixtures/policy-paths.json`
+out of the agent checkout beside it (`hannah-agent/` then `agent/`, overridden by
+`HANNAH_AGENT_FIXTURES`) and **fails closed** when it cannot — no table means
+R2/R3 report unavailable and every path watch is refused, which is the only safe
+direction. Two consequences of reading a file instead of calling a service, both
+open and neither worth a redesign today. The table is loaded **once per process**
+and cached, because `classify()` runs on every sample of every watch, so an asset
+regenerated while the sidecar is up is not picked up until it restarts. And
+nothing checks the asset's `version` against the running agent, so a sidecar
+installed beside a **stale** agent checkout enforces the older list in silence —
+the failure mode is a rule added here that the sidecar does not have, which is
+exactly the drift the generated asset exists to prevent, moved one layer out.
+A `version` compare at load, logged loudly, is the cheap half of the fix; the
+expensive half is deciding what a sidecar should do when it finds it is older
+than the policy, and refusing to start is probably right.
+
 <details><summary>Original entry</summary>
 
 **`~/.local/share/hannah-sense` was never added to `DENIED_DIRECTORIES`.**
@@ -406,6 +434,13 @@ completed" passes while doing nothing.
 *Trigger.* Before P5.2. The moment a trip can dispatch, "did it notice?" and "did
 it notice **once**?" stop being the same question.
 
+*The verification round did not close this and made the case for it louder.*
+Everything it found, it found by reading code and by probing a running sidecar by
+hand — the trip delivered to the wrong session, the symlink at sample time, the
+unit name that armed and could never be sampled. A committed trial against a real
+process is the one instrument nobody had, and two of those three would have shown
+up in one.
+
 ### 20
 **The trip inbox lives in the backend, not in the sidecar.** `VIGILANCE.md` §10
 puts the durable inbox in `hannah-sense`; it is in `senseBridge.js`, writing
@@ -417,9 +452,26 @@ about sessions or about `attachSession` — which is the delivery condition for 
 trip that happened while nobody was there. Putting it in the sidecar means either
 teaching it the session model or adding a route that exists for one consumer.
 
-*What it costs.* A trip survives a sidecar restart and a HUD reload, but not a
-backend reinstall that wipes `data/`, and a second backend against the same
-sidecar would each keep their own. Neither is a shape this product has today.
+*What it costs.* A trip survives a sidecar restart, a HUD reload **and a backend
+restart** — the file is read back at `init()` and there is an acceptance test for
+it (`senseBridge.test.js`, "el buzón sobrevive a un reinicio del backend") — but
+not a reinstall that wipes `data/`, and two backends against one sidecar would
+each keep their own. Neither is a shape this product has today.
+
+*What does not survive the restart is the ownership, and that is deliberate.*
+`conversationManager` lives in RAM, so after a backend restart no stored trip can
+belong to a session that still exists; every one of them comes back as an
+**orphan** — narrated to whoever is listening, in words that say it was set up in
+an earlier conversation and do not tell the listener they asked for it. Erring
+the other way would mean guessing that the person in front of the machine is the
+person who armed it, which is the exact leak `fdb2f32` closed.
+
+*One more thing that file is.* `watch-inbox.json` lives under the backend's
+`data/` (0700 dir, 0600 file) and holds labels, watch ids, session ids and
+timestamps — no observed content, but the label is the user's own sentence. That
+directory is covered by the agent's denylist only when `HANNAH_AGENT_DENY_DIRS`
+names it, which the launcher always does and a hand-started agent does not: the
+same residual as M5.0.2, now with one more file behind it.
 
 *Trigger.* A second backend host, or a second HUD host, or `sense.v1` growing an
 inbox route for another reason.
@@ -442,5 +494,79 @@ one; the day something does, the table has to already say `high`.
 module headers. SECURITY §3 gains T9–T12, §4 gains the split rows, §6 gains the
 "evidence frames are never persisted" asset class.
 
+*Partly paid, 2026-08-27.* The wire contract half is written: INTEGRATION **§4.5**
+now carries the four `watch_*` message types with their payloads and delivery
+rules, `WATCH_DISARM`, the attach snapshot in order, and the three
+`/api/v1/watches` routes with the reason their guard is stricter than the rest of
+the backend. That was the piece a second HUD or a second backend could not have
+been written without, and it had been in no gap at all. ADR-0013 and the SECURITY
+rows are still owed.
+
 *Trigger.* Before P5.2 touches the façade contract — that milestone amends
 INTEGRATION §2/§3 anyway, and one doc pass is cheaper than two.
+
+### 22
+**A watched path is still classified by name, and a name is not a file.** This is
+the residual of a real bug, so the bug comes first: until backend `5a175ae` the
+denylist ran **once**, at `POST /v1/watches`, and the sensor then reopened the
+path every period with `stat()`/`open()`, both of which follow symlinks. Two
+shapes were reproduced live and both ended with a sensor reading a `.env` — a
+*dangling* symlink (which `Path.resolve()` walks to the nearest existing ancestor,
+so it resolves to itself and passes under its own innocent basename, then follows
+its target the moment the target appears), and a real file *replaced* by a symlink
+afterwards, which is the shape of an ordinary log rotation. The sensor now keeps
+the raw path and goes through `open_watched()`: classify again now, `open` with
+`O_NOFOLLOW` and `O_NONBLOCK`, then classify the name the kernel gives the
+descriptor before reading a byte.
+
+*What is left, stated in that function's docstring so nobody concludes again that
+nothing is left.* The classify→open window still exists — what changed is that
+nothing is read inside it, so losing the race raises a `SensorFault` instead of
+producing a read. `/proc` is required to learn what was actually opened; without
+it the sensor fails closed. And **a hardlink is invisible**: the denylist is by
+name, and a hardlink gives one inode a second, innocent name.
+
+*Why it is here and not in the sidecar's own list.* The hardlink hole is the
+agent's whole path model — `policy/paths.ts` decides on strings — and it is the
+same hole for `read`, for `bash` and for a watch. What the watch adds is
+*duration*: the agent classifies milliseconds before a single read, and the
+sidecar turns that into a scheduled, repeated read for hours, which is why the
+sample-time classification was worth doing even though it does not close this.
+
+*Approach.* Deny by inode as well as by name — stat the denied set at load and
+compare `st_dev`/`st_ino` after `open` — or accept it explicitly, which is
+defensible for a single-user machine where the attacker who can make the hardlink
+can also read the file.
+
+*Trigger.* The day the policy model stops being a list of path rules, or the
+first time a watch is armed on something a second user can link.
+
+### 23
+**The backend ignores the `boot=` id the sidecar now sends.**
+`senseClient.subscribe()` keeps `lastId` for the life of the backend process and
+re-sends it as `Last-Event-ID` on every reconnect; the SSE comments — `sense.v1 connected`
+and `sense.resume from=… replayed=… truncated=… boot=…` — are parsed out and
+discarded, so the backend cannot tell a clean resume from a sidecar that
+restarted underneath it.
+
+*Why it is not urgent.* The half that was dangerous is fixed: `since()` used to
+answer `truncated=false` to a cursor ahead of the ring and then filter everything
+behind it, so a `Last-Event-ID` of 500 against a freshly restarted sidecar meant
+an open connection, `onStatus` saying `up`, and nothing but keep-alives — deaf
+while reporting healthy, which is the exact failure the blindness contract exists
+to catch. Backend `1a231ff` makes an impossible cursor behave like a new
+connection (whole ring, `truncated=true`) and takes the watermark from the ring
+instead of the client. So the sidecar now fails safe on its own, and a restarted
+sidecar returns its watches as `suspended` and emits nothing for them until
+somebody re-arms (assumption A4: re-arming is not consent).
+
+*What is still wrong-shaped.* The bridge dedupes by `(watchId, seq)` and `seq`
+restarts at 1 with each sidecar boot, while the bridge's `w.seq` is per backend
+process. Today no event can hit that, because a watch that survived a restart is
+`suspended` and silent; the day a `watchId` is reused across a boot — a resumed
+watch, a re-arm that keeps the id — its first events would be dropped as
+duplicates, silently. Reading `boot=` and resetting `lastId` and every `w.seq`
+when it changes is the fix, and it is small.
+
+*Trigger.* Before anything lets a `watchId` outlive a sidecar restart, which is
+P5.2's re-arm or P5.4's standing grants, whichever lands first.
