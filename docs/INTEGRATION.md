@@ -376,8 +376,8 @@ is an agent task and goes through §4.1/§4.2.
 
 | WS `type` | Source | Delivery | Frontend behavior |
 | --- | --- | --- | --- |
-| `watch_armed` | `watch.armed`, the attach snapshot, every reconcile | broadcast | the row's identity: create it, or **merge** into it by `watchId` |
-| `watch_state` | `watch.tripped` / `watch.blind` / `watch.recovered`, the attach snapshot, every reconcile | broadcast | how it is going: merge into the same row |
+| `watch_armed` | `watch.armed`, the attach snapshot, and a reconcile that adopts a row this process did not know | broadcast | the row's identity: create it, or **merge** into it by `watchId` |
+| `watch_state` | `watch.tripped` / `watch.blind` / `watch.recovered`, the attach snapshot, every row of every reconcile | broadcast | how it is going: merge into the same row |
 | `watch_tripped` | `watch.tripped` | **only the session that armed it** | the trip counter and the log line |
 | `watch_disarmed` | `watch.disarmed` | broadcast | the row is terminal; it leaves the screen after a linger |
 
