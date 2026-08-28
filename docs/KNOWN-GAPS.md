@@ -305,15 +305,16 @@ was built up to and deliberately stopped at, plus one thing its own milestone
 asked for and did not get.
 
 #22 onwards arrived differently and it is worth saying how: P5.1 was **verified
-independently after it was called done**, in three successive rounds, by people
-who had not built it. The first found thirteen defects — among them a trip
-narrated to a stranger and a path denylist a symlink walked past (backend
-`fdb2f32`…`3be949f`). The second found ten more, including a sidecar restart that
-passed in complete silence while the person went on believing she was being
-watched, and a trip that left the inbox before anyone knew it had been said
-(backend `1db1110`…`7bed4d9`, frontend `6f35661`, `fe62bd3`). The third found
-four, all of them inside the restart handling the second round had just added
-(backend `34f63ce`…`f460ee7`). All of them were fixed, not filed. What is filed
+independently after it was called done**, in three successive rounds by people
+who had not built it, numbered here the way `agent/docs/ROADMAP.md` numbers them.
+**Round two** found thirteen defects — among them a trip narrated to a stranger
+and a path denylist a symlink walked past (backend `fdb2f32`…`3be949f`).
+**Round three** found ten more, including a sidecar restart that passed in
+complete silence while the person went on believing she was being watched, and a
+trip that left the inbox before anyone knew it had been said (backend
+`1db1110`…`7bed4d9`, frontend `6f35661`, `fe62bd3`). **Round four** found four,
+every one of them inside code round three had itself just added (backend
+`34f63ce`…`f460ee7`). All of them were fixed, not filed. What is filed
 here is what those fixes **knowingly left open**, written down at the moment it
 was understood rather than after somebody else trips over it, which is the whole
 point of this file.

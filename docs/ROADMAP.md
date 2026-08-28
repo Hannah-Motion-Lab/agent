@@ -1145,8 +1145,9 @@ stack whose model provider was genuinely failing, which is why half of what it
 found is about what happens when the voice cannot speak; it took the phase's
 blocker and its highs, and it introduced a subsystem that had not existed before,
 **restart detection**. **Round four** found four defects and every one of them was
-inside that new subsystem — which is the ordinary shape of this: a fix is a new
-place for a defect to live. Fourteen commits, twelve in `backend/` and two in
+inside code round three had itself just added: three in that restart detection,
+one in the give-up ceiling its delivery acknowledgement created. Which is the
+ordinary shape of this: a fix is a new place for a defect to live. Fourteen commits, twelve in `backend/` and two in
 `frontend/`.
 
 | Fix | Round | What it was |
