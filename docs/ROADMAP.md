@@ -763,7 +763,7 @@ layout drift. Each one was verified against the checkout before it was fixed.
 | Milestone | Status | Evidence |
 | --- | --- | --- |
 | M5.0.1 `noActions` gates dispatch (re-opens AUDIT H6) | ✅ | backend `06e1719`; `tests/unit/narrationGate.test.js` |
-| M5.0.2 the denylist matches this layout | ✅ **with a stated gap** | agent `db51003` + workspace `d1fceaa`; `~/.local/share/hannah-sense` still missing (KNOWN-GAPS #18) |
+| M5.0.2 the denylist matches this layout | ✅ | agent `db51003` + workspace `d1fceaa`, plus the `hannah-sense` entries the same day (KNOWN-GAPS #18, closed) |
 | M5.0.3 the `ssh` arm in `PolicyCommands.fragments()` | ✅ | agent `a1b90d6`, `50390b7`; three tables in `test/hannah/policy.test.ts` |
 | M5.0.4 the layout drift (KNOWN-GAPS #15) | ✅ | backend `f6d959b` + workspace `d6dd3a1` |
 | M5.0.5 `cleanupExpiredSessions` fires `onDelete` | ✅ | backend `1266ec4`; `tests/unit/conversationManager.test.js:55` |
@@ -800,8 +800,13 @@ layout drift. Each one was verified against the checkout before it was fixed.
   nothing in the env var no compiled-in rule covers a checkout named `backend/`,
   and that residual is pinned as its own golden case in
   `docs/fixtures/policy-paths.json` rather than left to be rediscovered. The
-  `~/.local/share/hannah-sense` entry **was not added** — the sidecar's
-  `watches.json` is therefore readable by an agent task. KNOWN-GAPS #18.
+  `hannah-sense` half **landed later the same day**, in its own change: both
+  directories (`~/.local/share` and `~/.config`), `portal-token` by basename, and
+  the sidecar's two state files by a rule anchored on the directory name instead
+  of the bare basenames §9 asked for — `grants.json` and `watches.json` are
+  ordinary filenames in somebody else's tree and a deny is unappealable. Proven
+  live: `POST /v1/watches` on the sidecar's own `watches.json` went from 201 to
+  403, with the agent's own reason string. KNOWN-GAPS #18, closed.
 - **M5.0.3 — the `ssh` arm.** `fragments()` expanded `sh -c`, heredocs, `xargs`
   and `find -exec` but had no `ssh` arm: in `ssh host rm -rf /` the command word
   was `ssh` and the remote payload was never scanned. A second probe of the fix

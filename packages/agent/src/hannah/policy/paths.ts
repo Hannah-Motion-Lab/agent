@@ -46,6 +46,17 @@ const DENIED_DIRECTORIES = [
   // the engine's data dir. A task must never be able to read them back out.
   "~/.local/share/hannah-agent",
   "~/.config/hannah-agent",
+  // The sense sidecar's state (VIGILANCE §9), denied before the interesting file exists rather
+  // than after. Today it holds watches.json: the label the user spoke, the sensor spec, the path
+  // being watched. From P5.4 it also holds grants.json, which names the exact command a trip may
+  // run without asking, and from P5.5 the portal restore_token, a standing no-dialog grant to
+  // capture the screen. Without this entry a watch can be armed on the sidecar's own state and an
+  // agent task can read it back: the machinery deciding what she may do, readable by the thing it
+  // governs. `~/.config/hannah-sense` has nothing in it yet; it is listed now so the day it does,
+  // the rule is already there. The sidecar pins both paths literally and refuses to follow
+  // XDG_DATA_HOME precisely because this list names them (backend/sidecar/sense/config.py).
+  "~/.local/share/hannah-sense",
+  "~/.config/hannah-sense",
 ]
 
 /** Exact files that are denied wherever they live under the home directory. */
@@ -80,11 +91,20 @@ const DENIED_FILES = ["/etc/shadow", "/etc/gshadow", "/etc/sudoers", "/etc/maste
  * `hannah-backend` is the directory site/install.sh clones into. A development checkout keeps the
  * upstream name (`backend/`), which no pattern here can name without denying every unrelated
  * project's `backend/data` too — see HANNAH_AGENT_DENY_DIRS below.
+ *
+ * The `hannah-sense` rule is the decided half of VIGILANCE §9, which asked for bare `grants.json`
+ * and `watches.json` in DENIED_BASENAMES. They are anchored on the directory name instead: both
+ * are ordinary filenames in somebody else's project (an IAM fixture, a file-watcher config), a
+ * deny here is unappealable — no approval can lift it — and the two `hannah-sense` directory
+ * entries already cover the only place the sidecar ever writes. What the anchored rule buys over
+ * those entries is the copy that kept the directory name, which is the shape a backup of
+ * `~/.local/share` has, and it buys it at no cost to anyone else's tree.
  */
 const DENIED_PATTERNS = [
   /^\/proc\/[^/]+\/(environ|cmdline|maps|mem)$/i,
   /[\\/]hannah-backend[\\/]data([\\/]|$)/i,
   /[\\/](memory\.db|ui-token)$/i,
+  /[\\/]hannah-sense[\\/](grants|watches)\.json$/i,
 ]
 
 /**
@@ -103,6 +123,10 @@ const DENIED_BASENAMES = [
   /^credentials\.json$/i,
   /^service-account.*\.json$/i,
   /^\.htpasswd$/i,
+  // The xdg-desktop-portal restore_token (P5.5). Denied by name and not only by directory because
+  // it is a bearer secret: whoever holds it can start a ScreenCast with no dialog, so a copy is
+  // worth exactly what the original is. Same reason `ui-token` is denied wherever it lands.
+  /^portal-token$/i,
 ]
 
 /** Explicit exceptions to DENIED_BASENAMES — public material is not a secret. */

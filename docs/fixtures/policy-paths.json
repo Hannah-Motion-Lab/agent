@@ -27,7 +27,9 @@
     "/etc/sudoers.d",
     "/root",
     "~/.local/share/hannah-agent",
-    "~/.config/hannah-agent"
+    "~/.config/hannah-agent",
+    "~/.local/share/hannah-sense",
+    "~/.config/hannah-sense"
   ],
   "files": [
     "/etc/shadow",
@@ -60,6 +62,10 @@
     },
     {
       "source": "[\\\\/](memory\\.db|ui-token)$",
+      "flags": "i"
+    },
+    {
+      "source": "[\\\\/]hannah-sense[\\\\/](grants|watches)\\.json$",
       "flags": "i"
     }
   ],
@@ -102,6 +108,10 @@
     },
     {
       "source": "^\\.htpasswd$",
+      "flags": "i"
+    },
+    {
+      "source": "^portal-token$",
       "flags": "i"
     }
   ],
@@ -198,6 +208,48 @@
       "why": "the installed layout: every provider key in plaintext, denied by the path pattern"
     },
     {
+      "path": "~/.local/share/hannah-sense/watches.json",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "[\\\\/]hannah-sense[\\\\/](grants|watches)\\.json$",
+      "why": "the sense sidecar's own state: the label the user spoke, the sensor spec and the watched path"
+    },
+    {
+      "path": "~/.local/share/hannah-sense/grants.json",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "[\\\\/]hannah-sense[\\\\/](grants|watches)\\.json$",
+      "why": "P5.4 puts the pre-authorised command in here, so a watch on it reads the standing grants"
+    },
+    {
+      "path": "~/.local/share/hannah-sense/portal-token",
+      "sensitive": true,
+      "reason": "\"portal-token\" is a credential-bearing filename",
+      "rule": "/^portal-token$/i",
+      "why": "P5.5's portal restore_token: a standing, no-dialog grant to capture the screen"
+    },
+    {
+      "path": "~/.local/share/hannah-sense/watches.json.tmp",
+      "sensitive": true,
+      "reason": "~/.local/share/hannah-sense is a protected directory",
+      "rule": "~/.local/share/hannah-sense",
+      "why": "the atomic-write sibling holds the same bytes and matches no filename rule: the directory entry is what covers it"
+    },
+    {
+      "path": "~/.config/hannah-sense/settings.json",
+      "sensitive": true,
+      "reason": "~/.config/hannah-sense is a protected directory",
+      "rule": "~/.config/hannah-sense",
+      "why": "the config half of the sidecar's state, denied before anything writes there rather than after"
+    },
+    {
+      "path": "~/backups/hannah-sense/grants.json",
+      "sensitive": true,
+      "reason": "process environment or Hannah's own data",
+      "rule": "[\\\\/]hannah-sense[\\\\/](grants|watches)\\.json$",
+      "why": "a copy that kept the directory name, the shape a backup of ~/.local/share has: what the anchored rule buys over the directory entries"
+    },
+    {
       "path": "/opt/hannah-motion-lab/backend/data/settings.json",
       "denyDirs": "/opt/hannah-motion-lab/backend/data",
       "sensitive": true,
@@ -250,6 +302,16 @@
       "path": "~/Projects/demo/backend/src/index.js",
       "sensitive": false,
       "why": "a sibling of a denied data/ directory stays readable"
+    },
+    {
+      "path": "~/Projects/demo/watches.json",
+      "sensitive": false,
+      "why": "the decision §9 left open: no bare basename rule, because a file-watcher config is not the sidecar's state and a deny is unappealable"
+    },
+    {
+      "path": "~/Projects/demo/grants.json",
+      "sensitive": false,
+      "why": "same call for the higher-value name: an IAM fixture in somebody's repo stays readable, the sidecar's own copy is denied by directory"
     },
     {
       "path": "/opt/hannah-motion-lab/backend/data/../logs/train.log",

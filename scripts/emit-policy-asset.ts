@@ -86,6 +86,30 @@ const GOLDEN: readonly Case[] = [
     why: "the installed layout: every provider key in plaintext, denied by the path pattern",
   },
   {
+    path: "~/.local/share/hannah-sense/watches.json",
+    why: "the sense sidecar's own state: the label the user spoke, the sensor spec and the watched path",
+  },
+  {
+    path: "~/.local/share/hannah-sense/grants.json",
+    why: "P5.4 puts the pre-authorised command in here, so a watch on it reads the standing grants",
+  },
+  {
+    path: "~/.local/share/hannah-sense/portal-token",
+    why: "P5.5's portal restore_token: a standing, no-dialog grant to capture the screen",
+  },
+  {
+    path: "~/.local/share/hannah-sense/watches.json.tmp",
+    why: "the atomic-write sibling holds the same bytes and matches no filename rule: the directory entry is what covers it",
+  },
+  {
+    path: "~/.config/hannah-sense/settings.json",
+    why: "the config half of the sidecar's state, denied before anything writes there rather than after",
+  },
+  {
+    path: "~/backups/hannah-sense/grants.json",
+    why: "a copy that kept the directory name, the shape a backup of ~/.local/share has: what the anchored rule buys over the directory entries",
+  },
+  {
     path: `${MACHINE_DENIED}/settings.json`,
     denyDirs: MACHINE_DENIED,
     why: "the development layout (B2): denied only because the machine named it in the env var",
@@ -104,6 +128,14 @@ const GOLDEN: readonly Case[] = [
     why: "R2 watches checkpoint mtime; denying it would kill the rung",
   },
   { path: "~/Projects/demo/backend/src/index.js", why: "a sibling of a denied data/ directory stays readable" },
+  {
+    path: "~/Projects/demo/watches.json",
+    why: "the decision §9 left open: no bare basename rule, because a file-watcher config is not the sidecar's state and a deny is unappealable",
+  },
+  {
+    path: "~/Projects/demo/grants.json",
+    why: "same call for the higher-value name: an IAM fixture in somebody's repo stays readable, the sidecar's own copy is denied by directory",
+  },
   {
     path: `${MACHINE_DENIED}/../logs/train.log`,
     denyDirs: MACHINE_DENIED,

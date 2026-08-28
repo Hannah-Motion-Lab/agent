@@ -59,6 +59,36 @@ describe("sensitive paths", () => {
     expect(PolicyPaths.classify("~/.config/hannah-agent/hannah-agent.jsonc", CWD).sensitive).toBe(true)
   })
 
+  test("the sense sidecar's state is off limits too, before it holds a grant", () => {
+    // VIGILANCE §9. hannah-sense keeps watches.json today (labels, sensor specs, the watched
+    // path), and from P5.4/P5.5 grants.json — which names the pre-authorised command — and the
+    // portal restore_token, a standing no-dialog grant to capture the screen. Without these rules
+    // a watch can be armed on the sidecar's own state file and the agent can read the standing
+    // grants: the machinery watching the task, readable by the task.
+    expect(PolicyPaths.classify("~/.local/share/hannah-sense/watches.json", CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify("~/.local/share/hannah-sense/grants.json", CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify("~/.local/share/hannah-sense/portal-token", CWD).sensitive).toBe(true)
+    // The atomic-write sibling holds the same bytes and matches no filename rule: it is the case
+    // the directory entry exists for.
+    expect(PolicyPaths.classify("~/.local/share/hannah-sense/watches.json.tmp", CWD).sensitive).toBe(true)
+    expect(PolicyPaths.classify("~/.config/hannah-sense/settings.json", CWD).sensitive).toBe(true)
+    // A copy of the state that kept its directory name, the shape a backup of ~/.local/share has.
+    expect(PolicyPaths.classify("~/backups/hannah-sense/grants.json", CWD).sensitive).toBe(true)
+  })
+
+  test("but grants.json and watches.json are not denied by name alone", () => {
+    // The decided half of the same rule: a hard deny is unappealable, and both are plausible
+    // filenames in an unrelated project (an IAM fixture, a file-watcher config). The sidecar pins
+    // its state directory literally so the directory entry covers the real case; a bare basename
+    // rule would buy the copies the pattern above already catches, at the price of refusing to
+    // read somebody else's file forever, with no way to say yes.
+    expect(PolicyPaths.classify("~/Projects/demo/grants.json", CWD).sensitive).toBe(false)
+    expect(PolicyPaths.classify("~/Projects/demo/watches.json", CWD).sensitive).toBe(false)
+    // portal-token is the exception: it is a bearer secret, so a copy is worth exactly as much as
+    // the original, the same reason ui-token is denied wherever it lands.
+    expect(PolicyPaths.classify("~/Projects/demo/portal-token", CWD).sensitive).toBe(true)
+  })
+
   describe("traversal cannot get around it", () => {
     const traversals = [
       "~/Projects/../.ssh/id_rsa",

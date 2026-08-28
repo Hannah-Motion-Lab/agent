@@ -1,7 +1,8 @@
 # Known gaps
 
 > Status: opened 2026-08-22 after M3.4; #4 and #12 closed in M3.6 the same day.
-> #16–#21 added 2026-08-27 by P5.0/P5.1 (the watches — see ROADMAP Phase 5).
+> #16–#21 added 2026-08-27 by P5.0/P5.1 (the watches — see ROADMAP Phase 5);
+> #18 closed the same day.
 > Reviewed at every phase boundary; an entry leaves only when it is closed or
 > explicitly accepted.
 
@@ -32,7 +33,7 @@ where the work is knowingly incomplete.
 | [14](#14) | Duplicate `@hannah/Image` service tag | Deliberate | ~1 h | If it ever bites |
 | [16](#16) | R0 (a wrapper's exit code) is not implemented | Design | ~1 d | P5.2, when she can start what she watches |
 | [17](#17) | R6b, R7, R8, R9, R10 are not built | Their phases | ~8 wks | P5.3 / P5.5 / P5.6 |
-| [18](#18) | `~/.local/share/hannah-sense` is not on the denylist | Nothing | ~30 m | Now; it was M5.0.2's own second half |
+| ~~18~~ | ~~`~/.local/share/hannah-sense` is not on the denylist~~ | — | — | **closed 2026-08-27** |
 | [19](#19) | The P5.1 exit demo is not a committed trial | Nothing | ~4 h | Before P5.2 adds acting to it |
 | [20](#20) | The trip inbox is in the backend, not the sidecar | Contract | ~1 d | A second backend, or a second HUD host |
 | [21](#21) | P5.1 shipped without ADR-0013 and without SECURITY T9–T12 | Nothing | ~3 h | Before P5.2 changes the façade contract |
@@ -329,7 +330,39 @@ that M5.0.3 is done), P5.5 for the pixels (spike first, ships disabled), P5.6 fo
 AT-SPI (spike first, and the honest answer to most GUI cases is A4 — the
 application's own CLI — not a synthetic click).
 
-### 18
+### 18 — closed 2026-08-27
+`~/.local/share/hannah-sense` and `~/.config/hannah-sense` are in
+`DENIED_DIRECTORIES`, `portal-token` is in `DENIED_BASENAMES`, and the sidecar's
+two state files are denied by a rule anchored on the directory name
+(`[\\/]hannah-sense[\\/](grants|watches)\.json$`) in `DENIED_PATTERNS`.
+Regenerated into `docs/fixtures/policy-paths.json` with eight golden cases, so
+the Python side picks the same verdicts up without a second table: a
+`POST /v1/watches` on the sidecar's own `watches.json` answers **403** with the
+agent's own reason string, where the day before it answered **201**.
+
+*What was decided instead of implemented.* VIGILANCE §9 asked for bare
+`grants.json` and `watches.json` in `DENIED_BASENAMES`. They are deliberately
+not there. Both are ordinary filenames in somebody else's tree — an IAM fixture,
+a file-watcher config — a deny here is unappealable by design, and the directory
+entries already cover the only place the sidecar ever writes: `config.py` pins
+the path literally and refuses to follow `XDG_DATA_HOME` *because* this list
+names it, which is a comment that is now true rather than aspirational. The
+anchored pattern buys the one case the directory entries miss, at no cost to
+anyone else's tree: a copy that kept the directory name, the shape a backup of
+`~/.local/share` has. `portal-token` is denied by name because it is a bearer
+secret — whoever holds it starts a ScreenCast with no dialog — so a copy is
+worth exactly what the original is, the same argument `ui-token` already won.
+
+*What remains.* Two things, both narrow. `HANNAH_SENSE_STATE_DIR` moves the
+state out from under all of it; it is documented as tests-only and warns loudly,
+and nothing on the agent side can tell that it was set. And `grants.json` and
+`portal-token` **do not exist yet** — the rules are ahead of the files, so P5.4
+and P5.5 have to use those exact names or the rules are silently dead, which is
+precisely how the `hannah-backend/data` pattern came to be dead in a development
+checkout (VIGILANCE B2).
+
+<details><summary>Original entry</summary>
+
 **`~/.local/share/hannah-sense` was never added to `DENIED_DIRECTORIES`.**
 M5.0.2 asked for it in the same change as the `hannah-backend/data` fix and only
 the second half landed. The sidecar's state directory is 0700 with 0600 files and
@@ -348,6 +381,8 @@ denied precisely so a task cannot read the machinery watching it.
 golden asset test fails until it is regenerated, which is the point of it.
 
 *Trigger.* Now. It is thirty minutes and it was already agreed.
+
+</details>
 
 ### 19
 **The P5.1 exit demo is not a committed trial.** The bar was `sense-trials`: a
