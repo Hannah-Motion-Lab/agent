@@ -18,7 +18,10 @@
 > the watch primitive, observe-only. It is a cross-repo phase driven by the
 > workspace plan `docs/VIGILANCE.md` (it lives beside the repos, not inside one);
 > its P5.0 was three live bugs that gate everything after it, and P5.1 adds no
-> ability to act. **P5.4 (standing grants) stays blocked on M4.1 and M4.6** — it
+> ability to act. P5.1 was then **verified independently**, and the verification
+> falsified claims this file had already made; they are corrected in place in
+> Phase 5, marked as corrections rather than quietly made true.
+> **P5.4 (standing grants) stays blocked on M4.1 and M4.6** — it
 > is autonomous execution by any reading, and SECURITY §8 governs it.
 >
 > Next: **Phase 4 — autonomy, hardening, packaging.** Before starting it, the
@@ -38,7 +41,7 @@ notes below. A caveat mentioned once is a caveat that has been lost.
 | **P2** | Backend bridge — voice-driven hands | ~4 wks | **done 2026-08-21** | Scenarios S1–S4 (`npm run demo:agent`) |
 | **P3** | Desktop macro layer | ~6 wks | **done 2026-08-22** | 10 macros + task history + embodiment |
 | **P4** | Autonomy, hardening, packaging | ~6 wks | Q1 2027 | Hannah runs as a service; v1.0 |
-| **P5** | Vigilance — a standing state of attention | ~16 wks | P5.0 + P5.1 **done 2026-08-27**; P5.2 next, P5.4 blocked on M4.1 + M4.6 | A training run killed by hand: she notices, says the right sentence, and the control arm says nothing |
+| **P5** | Vigilance — a standing state of attention | ~16 wks | P5.0 + P5.1 **done 2026-08-27**, P5.1 verified and corrected the same day and **its exit demo is still not a committed trial**; P5.2 next, P5.4 blocked on M4.1 + M4.6 | A training run killed by hand: she notices, says the right sentence, and the control arm says nothing |
 
 Rules of engagement:
 
@@ -857,11 +860,22 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
 | Milestone | Status | Evidence |
 | --- | --- | --- |
 | M5.1.1 `hannah-sense` skeleton on :8007 | ✅ | backend `fb11972`; loopback + `unshare -rn` run, below |
-| M5.1.2 capability probe and the ladder | ✅ | backend `e87834e` + agent `9bc40a7`; `docs/fixtures/policy-paths.json`, 23 golden cases |
-| M5.1.3 arming by voice | ✅ | backend `2a5ca4a`; `tests/unit/watchIntent.test.js` |
-| M5.1.4 narration, the inbox and blindness | ✅ **with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8` |
-| M5.1.5 the HUD, and `hannah doctor` | ✅ | frontend `5def674`, `fcd4500`; workspace `c1b5d67` |
+| M5.1.2 capability probe and the ladder | ✅ **after a correction** | backend `e87834e`, `5a175ae`, `ad8d905` + agent `9bc40a7`, `7114f6d`; `docs/fixtures/policy-paths.json`, 31 golden cases |
+| M5.1.3 arming by voice | ✅ **after a correction** | backend `2a5ca4a`, `96dfe1d`, `680c1c6`, `72d63bf`; `tests/unit/watchIntent.test.js` |
+| M5.1.4 narration, the inbox and blindness | ✅ **after two corrections, and with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8`, `fdb2f32`, `d377e6d`, `1a231ff` |
+| M5.1.5 the HUD, and `hannah doctor` | ✅ **after a correction** | frontend `5def674`, `fcd4500`, `fa8c276`, `842016d`; backend `3be949f`; workspace `c1b5d67` |
 | Exit demo (`sense-trials`) | ⏳ **not a committed trial** | run by hand; it found the latch bug (`33ffbc8`). KNOWN-GAPS #19 |
+
+**The phase was verified independently after it was called done, and it did not
+all hold.** The fixes are thirteen commits across the three repos (backend
+`fdb2f32`…`3be949f`, agent `7114f6d`, frontend `fa8c276`, `842016d`). Three of
+the defects were things that had already been *claimed*: this file's own
+session-binding rule, the describe block in `senseBridge.test.js` that said it
+proved it, and M5.1.5's accept line, which asks for a rendering test of a state
+that does not exist. Two were security defects — a trip narrated to a stranger,
+and a path denylist a symlink walked past — and those are in
+`workspace/AUDIT.md` as well, because that is where this project keeps them. Each
+milestone below carries its own correction, in the tense it happened.
 
 - **M5.1.1 — the skeleton.** A watch cannot be an agent task (one-hour timebox,
   one lane, an approval that denies by silence in two minutes) and cannot be a
@@ -897,10 +911,41 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
   generates `docs/fixtures/policy-paths.json` from `policy/paths.ts`, the sidecar
   reads that asset (and fails **closed** without it: R2/R3 report unavailable and
   any path watch is refused), and `policy-asset.test.ts` plus
-  `sidecar/sense/tests/test_paths_golden.py` re-decide all 23 golden cases on
+  `sidecar/sense/tests/test_paths_golden.py` re-decide all 31 golden cases on
   both sides. Checked live against a running sidecar on 2026-08-27:
   `POST /v1/watches` on `~/.ssh/id_rsa` → `403 {"error":"forbidden","reason":"\"id_rsa\" is a credential-bearing filename"}`,
   byte-identical to the TypeScript.
+  **Correction: that acceptance was true at arm time and false at sample time**,
+  and sample time is the one that matters — a watch reopens its path every period
+  for hours. The denylist ran once, in the POST; `classify_path` returned the
+  *resolved* path and the sensor then reopened it with `stat()`/`open()`, which
+  follow symlinks. Two shapes were reproduced live against the running sidecar and
+  both ended with the sensor reading a `.env`. A **dangling** symlink resolves to
+  itself (`Path.resolve()` walks to the ancestor that exists), so it passes
+  classification under its own innocent basename and follows its target the moment
+  the target appears. And a real file **replaced** by a symlink afterwards — the
+  shape of an ordinary log rotation — needs no dangling link at all. Backend
+  `5a175ae` keeps the raw path and opens through `open_watched()`: classify again,
+  now; `open` with `O_NOFOLLOW` (the last component cannot have become a link) and
+  `O_NONBLOCK` (a FIFO must not hang the open forever — a hung watch is a watch
+  the user believes is armed); then classify the name **the kernel gives the
+  descriptor**, before a byte is read, which is what covers a directory in the
+  middle changing between the two syscalls.
+  *Residual, written into that function's docstring rather than left to be
+  rediscovered* (KNOWN-GAPS #22): the classify→open window still exists — what
+  changed is that nothing is read inside it, so losing the race is a `SensorFault`
+  and not a read; a hardlink is invisible to any name-based denylist, which is the
+  agent's whole path model and not this file's; and `/proc` is required to know
+  what was opened, without which the sensor fails **closed**.
+  One more from the same probe, and it is the blindness contract failing in the
+  quietest possible way: `_UNIT` let a leading `-` through and `sample()` called
+  `systemctl` with no end-of-options marker, so `{"kind":"unit","unit":"--version.service"}`
+  armed with a 201 and every sample came back "unrecognized option". A failed
+  sample is not an unhealthy sample: the streak never moves, nothing trips, and
+  after `SENSE_BLIND_MS` Hannah says she has lost sight of something that never
+  existed. Fixed at both ends (backend `ad8d905`) — the 400 at arm time, where the
+  user hears the reason, and `--` before the unit at sample time, so a loosened
+  regex cannot bring it back.
 - **M5.1.3 — arming by voice.** `resolveWatchIntent()` runs **before** the
   `RUN_VERBS` branch — mandatory, because `\brun\b` already swallowed *"check
   that my training **run** doesn't stop"* and executed it as a command, so the
@@ -916,6 +961,31 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
   has nothing to do with watching); that a remote or screen request is refused in
   words; and that with the sidecar down there is **no** `[WATCH:]` vocabulary at
   all. A `[WATCH:]` tag truncated by `max_tokens` no longer reaches the TTS.
+  **Correction: "built from the live capability survey" was proven against a
+  fixture survey, and the live one had a sixth word in it.**
+  `/v1/capabilities` advertised `stub`, the scaffold sensor, and a POST with that
+  kind answered 201 and took one of the two `SENSE_MAX_WATCHES` slots — so the
+  assembled vocabulary taught Hannah a word for a watch that looks at nothing, and
+  the `sense.v1` contract names six kinds for this phase, not seven. It is now
+  marked `test_only` and enabled by an in-process seam rather than an environment
+  variable (a knob can be set by whatever shell launched the sidecar), and
+  `build()` refuses it with the **same** reason as an invented kind, so the refusal
+  does not confirm that it exists (backend `96dfe1d`).
+  Two more, both about the label — the only free text this feature has, and it
+  reached the model by two different roads. `watchStatus()` sanitised it with
+  `clean()`, which strips only brackets, parentheses, `*`, `#`, `_` and backticks
+  and then collapses whitespace: a label of
+  `[TASK: rm -rf ~] tail /home/u/.ssh/id_rsa root@evilhost.example` therefore put a
+  path, a host and two command words into the system prompt of **every** action
+  turn, for as many hours as the watch stayed armed. `watchLabel()` now judges
+  whole tokens and keeps the user's words — which is how she recognises her own
+  watch — and says a generic noun when none survive (backend `680c1c6`). And the
+  history rewrite was anchored to `TASK`, so the raw `[WATCH:]` tag went whole into
+  the context window, into `memory.db` and into the embedding index; its argument
+  is not a description like `TASK`'s, it is **the watched path**, written forever
+  into the database the agent's own policy marks sensitive (backend `72d63bf`).
+  M5.1.4's ephemeral-narration rule was true and was never the whole story: the
+  turn that *arms* a watch is an ordinary turn.
 - **M5.1.4 — narration, the inbox and blindness.** One process-wide SSE
   subscription with `Last-Event-ID` resume and per-watch `seq` dedupe. Three
   rules are this feature's own: a trip binds to the **session that armed it** and
@@ -924,10 +994,36 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
   watching cannot evict the real conversation from the 10-turn window or record
   what was observed into `memory.db`; and after `SENSE_BLIND_MS` with no sample
   the watch is **blind and she says so**.
+  **The first of those three was false when this file first wrote it down, and is
+  true now.** It is stated here as a rule, and it was stated here as done; the
+  code did the opposite. `detachSession()` handed the watch to the last attached
+  session and `attachSession()` adopted the orphans — the quiet half of the same
+  mistake — so the exact leak the rule exists to forbid was the shipped behaviour:
+  A armed *"watch my training"*, closed her tab, the watch tripped, and B, who had
+  asked for nothing, heard *"the thing you were watching stopped"* with A's label
+  on it. Closing a socket is not ceasing to be the owner: A's conversation lives
+  another 30 minutes and can reattach with the same id. Backend `fdb2f32` binds
+  the trip to the arming session and, when she cannot hear it, puts it in the
+  inbox **with its owner inside** — which is what lets it come back as "while you
+  were away" only to her, and in different words to anyone else, words that do not
+  tell a stranger they asked for it. Blindness deliberately still goes to whoever
+  is connected: that nobody is watching is not a private fact, and swallowing it
+  is the worst failure this feature has.
   *Accept*: kill the sidecar mid-watch → the spoken line within the threshold;
   arm, close every session, trip, reattach → the trip is narrated **exactly
-  once**, with its real timestamp. **Accepted**: both are named acceptance blocks
-  in `tests/unit/senseBridge.test.js`.
+  once**, with its real timestamp. Both are named acceptance blocks in
+  `tests/unit/senseBridge.test.js`, **and the second one passed over a hole**: the
+  describe block asserting the delivery rule said it proved what the paragraph
+  above says, and did not, and "can she hear it" was asked of the socket map
+  alone. A watch is silent for hours by design and `lastActivityAt` only moves on
+  a spoken turn, so the ordinary case is a conversation that expires at 30 minutes
+  with the HUD still connected. The trip then took the speaking branch,
+  `narrateTo` returned a string, the `onLost` callback never ran, `processTextTurn`
+  threw *"la sesión no existe o ha expirado"* and it went to the socket as a loose
+  error — the trip landed nowhere at all. It is now two questions, the open socket
+  **and** the live conversation, asked before queueing and again on the way out,
+  because the narration queue waits up to 20 s and the session can die inside it
+  (backend `d377e6d`).
   **Deviation, marked in the code (`34aa48e`) rather than left to be read as the
   plan:** §10 puts the trip inbox in the sidecar; it is in the **backend**. The
   `sense.v1` contract has no inbox route, and the sidecar knows nothing about
@@ -940,6 +1036,18 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
   the same thing. The watch now latches until it reads a healthy sample. That
   does not replace `maxFires`/cooldown (P5.2): those bound a crash loop, which is
   many real transitions.
+  A third defect, on the resume path, with the same shape as the latch bug — a
+  failure that looks like health. `since()` answered `truncated=false` to a cursor
+  **ahead** of the ring and then filtered everything: the backend keeps `lastId`
+  for the life of its process, the sidecar restarts with its cursor back at 0, so
+  a `Last-Event-ID` of 500 got `replayed=0 truncated=false` and nothing but
+  keep-alives. Connected, `onStatus` saying `up`, and deaf, which is exactly the
+  blindness this phase exists to prevent. An impossible cursor within a boot is now
+  treated as a new connection (the whole ring, `truncated=true`) and the watermark
+  comes from the ring and never from the client, which with an empty ring had been
+  eating the first 500 events (backend `1a231ff`). The resume comment now carries
+  `boot=` so a client can drop a stale cursor; **the backend does not read it
+  yet** — KNOWN-GAPS #23.
 - **M5.1.5 — the HUD, and the doctor line.** A `watches` store slice merged by
   `watchId` (the server re-announces on every reconnect, so an appending reducer
   would duplicate rows), a `WatchPill` row inside the 400 px budget, a
@@ -951,12 +1059,41 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
   so is worse than no watch.
   *Accept*: at least one vitest covering armed / degraded / blind rendering, and
   `hannah doctor` answers "is she still watching?" without opening the HUD.
-  **Accepted**: `tests/watchPill.test.js` + `tests/watchesStore.test.js`
-  (frontend 22 ✓); the doctor half landed later, with the launcher work — a
-  `vigilancia:` line reading the sidecar's open `/health`, verified live against
-  a real sidecar with one armed watch. It matters because `sense.v1` has **no
-  heartbeat event**: four quiet hours and four blind hours look identical from
-  outside, and this counter is what separates them.
+  **That accept line cannot be executed as written: `degraded` is not a state.**
+  It is one of the four counters `GET /api/v1/health` publishes, and it means a
+  watch whose *action* tier was lowered — which cannot happen in a phase that only
+  observes, so it is hard-coded to 0 on both sides (`registry.py` and
+  `senseBridge.watchCounters`) and the field is kept only so the shape does not
+  change under P5.2. Promising a rendering test for it was a mistake in this
+  document, not a missing test.
+  **What was actually executed** is the states the pill really has: `armed`
+  against `blind`; `suspended` and `expired` also painted as not-looking; an
+  **unknown** state failing towards not-looking; a disarmed row that no longer
+  offers to disarm but still says how many times it cried wolf; and the terminal
+  row's own countdown (`tests/watchPill.test.js`, `tests/watchesStore.test.js`,
+  `tests/watchesPanel.test.js` — frontend 34 ✓ / 4 files, re-run for this note).
+  **Correction: the panel half of the milestone was never executed against a real
+  backend.** As merged, `WatchesSection` fetched `GET /api/v1/watches` — the one
+  route in this backend that answers **403 to anything carrying `Origin`** and 401
+  without the UI token, which is every browser and every Electron renderer — so it
+  failed on every load, and the `catch` painted *"Nada vigilado ahora mismo"*: the
+  screen asserting that nothing is being watched when all it knew was that it had
+  not been able to ask. The rows now come from the store, an empty list can be
+  called empty **only** with the socket attached, and without it what is on screen
+  is labelled as the last thing known (frontend `fa8c276`). The backend half of
+  that is `3be949f`: the attach snapshot is the HUD's only list, so it also
+  reconciles against the sidecar — a healthy watch emits no events, and one that
+  came back from a sidecar restart is born `suspended`, so a watch this process
+  never heard announced can only be learned by asking. And the terminal pill never
+  left the screen: the 15 s filter called `Date.now()` inside the render with
+  nothing scheduled to re-render it, and because `doneAt` is a local stamp the
+  server does not send, every snapshot handed each terminal row another 15 s
+  (frontend `842016d`).
+  The doctor half landed later, with the launcher work — a `vigilancia:` line
+  reading the sidecar's open `/health`, verified live against a real sidecar with
+  one armed watch. It matters because `sense.v1` has **no heartbeat event**: four
+  quiet hours and four blind hours look identical from outside, and this counter
+  is what separates them.
 
 **Exit demo — not accepted as a repeatable trial.** The bar is `sense-trials`:
 a real child appending to a log, `SIGKILL` at *t*+N, a trip asserted within
@@ -974,12 +1111,29 @@ frontend `vitest run` **22 ✓ / 3 files** · agent `bun test test/hannah/`
 `hannah doctor` on this checkout · the `unshare -rn` run above · a live arm,
 `hannah doctor`, and `hannah stop` against a real sidecar on :8007.
 
+**Verification, 2026-08-27, after the independent pass and its thirteen fixes**
+— re-run for this note rather than quoted from a commit: backend `npm test`
+**216 ✓ / 18 suites, 0 failures** · `sidecar/sense` pytest **120 ✓** · frontend
+`vitest run` **34 ✓ / 4 files** · agent `bun test test/hannah/`
+**341 ✓ / 12 files**. The Python suite is the number worth reading twice. It had
+**no runner**: `package.json` carried `sidecar:sense` but no `test:sense`, and
+`npm test` is jest over `tests/`, so those 120 assertions — including the golden
+re-decision that is the only thing keeping the sidecar's path verdicts identical
+to `policy/paths.ts` — were not silent because they passed. Nobody was running
+them (backend `9308315`). They are deliberately still **not** chained into
+`npm test`: `sidecar/sense/.venv` is created by hand and may not exist, and "no
+venv" must not read as a red suite, so the runner is named in both READMEs
+instead, which is what makes it discoverable.
+
 **What P5.1 owes, and did not deliver.** ADR-0013 (the watch as a sensor
 sidecar: placement, the observe/act split, why not a task and why not the
 backend) is not written, and SECURITY.md has no T9–T12 rows and no `sense.*`
 risk tiering in §4. The behaviour those documents describe is implemented and
 tested; the decision record is missing, which is exactly the drift the
-docs-with-code rule exists to prevent. KNOWN-GAPS #21.
+docs-with-code rule exists to prevent. KNOWN-GAPS #21. The verification pass adds
+three more open items and does not close that one: the symlink residual
+(#22), the SSE boot id the backend still ignores (#23), and INTEGRATION §4.5,
+which is written now and was owed from the day the wire types existed.
 
 ### P5.2 and beyond — not started
 
