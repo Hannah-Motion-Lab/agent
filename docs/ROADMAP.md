@@ -14,6 +14,13 @@
 >   the macro library (bar the model-backed trials, also key-blocked), M3.3 MCP
 >   policy, M3.4 queued tasks, M3.5 history & observability, M3.6 embodiment.
 >
+> Then, out of order and deliberately: **P5.0 and P5.1 are done (2026-08-27)** —
+> the watch primitive, observe-only. It is a cross-repo phase driven by the
+> workspace plan `docs/VIGILANCE.md` (it lives beside the repos, not inside one);
+> its P5.0 was three live bugs that gate everything after it, and P5.1 adds no
+> ability to act. **P5.4 (standing grants) stays blocked on M4.1 and M4.6** — it
+> is autonomous execution by any reading, and SECURITY §8 governs it.
+>
 > Next: **Phase 4 — autonomy, hardening, packaging.** Before starting it, the
 > key-blocked verification in KNOWN-GAPS #1 and #2 should be run: P4 should not
 > build on a path that has never met a real model.
@@ -31,6 +38,7 @@ notes below. A caveat mentioned once is a caveat that has been lost.
 | **P2** | Backend bridge — voice-driven hands | ~4 wks | **done 2026-08-21** | Scenarios S1–S4 (`npm run demo:agent`) |
 | **P3** | Desktop macro layer | ~6 wks | **done 2026-08-22** | 10 macros + task history + embodiment |
 | **P4** | Autonomy, hardening, packaging | ~6 wks | Q1 2027 | Hannah runs as a service; v1.0 |
+| **P5** | Vigilance — a standing state of attention | ~16 wks | P5.0 + P5.1 **done 2026-08-27**; P5.2 next, P5.4 blocked on M4.1 + M4.6 | A training run killed by hand: she notices, says the right sentence, and the control arm says nothing |
 
 Rules of engagement:
 
@@ -726,6 +734,265 @@ al día") running as queued tasks while conversation continues.
 - **M4.6 — Security review gate**: full pass over SECURITY.md checklists +
   fresh egress audit + injection red-team scripts. **Autonomous defaults ship
   only after this gate.** Tag `v1.0.0`.
+
+---
+
+## Phase 5 — Vigilance: a standing state of attention
+
+Goal: Hannah can keep looking at something after the conversation turn ends, and
+say so when it stops. Cross-repo (`backend`, `agent`, `frontend`, `workspace`),
+driven by the workspace plan `docs/VIGILANCE.md`, whose §4 rules govern
+everything below:
+
+> **R1** the sidecar observes, the agent acts — one actuator, one audit trail.
+> **R2** observation is execution too — sensors are typed specs, never command
+> strings, and every path is classified before use.
+> **R3** observed text never reaches an action path.
+
+The new piece is `hannah-sense`, a fifth Python sidecar on **127.0.0.1:8007**,
+living in `hannah-backend/sidecar/sense/`. This repo's share of the phase is
+P5.0's policy work plus the generated denylist asset both sides read; the agent
+gains **no new tool** — a `sense` tool would be a second read path with a second
+permission key for no capability gain.
+
+### P5.0 — Prerequisites — **DONE 2026-08-27**
+
+Not the feature. Gates on it: three live bugs found while planning, plus the
+layout drift. Each one was verified against the checkout before it was fixed.
+
+| Milestone | Status | Evidence |
+| --- | --- | --- |
+| M5.0.1 `noActions` gates dispatch (re-opens AUDIT H6) | ✅ | backend `06e1719`; `tests/unit/narrationGate.test.js` |
+| M5.0.2 the denylist matches this layout | ✅ **with a stated gap** | agent `db51003` + workspace `d1fceaa`; `~/.local/share/hannah-sense` still missing (KNOWN-GAPS #18) |
+| M5.0.3 the `ssh` arm in `PolicyCommands.fragments()` | ✅ | agent `a1b90d6`, `50390b7`; three tables in `test/hannah/policy.test.ts` |
+| M5.0.4 the layout drift (KNOWN-GAPS #15) | ✅ | backend `f6d959b` + workspace `d6dd3a1` |
+| M5.0.5 `cleanupExpiredSessions` fires `onDelete` | ✅ | backend `1266ec4`; `tests/unit/conversationManager.test.js:55` |
+
+- **M5.0.1 — `noActions` gates dispatch.** The flag only stripped the protocol
+  from the *system prompt*; the post-hoc `[TASK:]`/`[MOVE:]` regexes ran on every
+  turn, so the camera loop and the hands' own narration — text somebody else
+  wrote — could dispatch a real task. It now travels into
+  `processAndSendSegment` and gates **execution**, never the stripping: the tag
+  has to disappear either way or the TTS reads it out loud.
+  *Accept*: a narration turn whose model output contains `[TASK: rm -rf ~]` and
+  `[MOVE: fullscreen]` dispatches nothing and moves nothing.
+  **Accepted**: `narrationGate.test.js` feeds exactly that string (plus a
+  `[WATCH:]`) and asserts nothing dispatched, nothing moved, nothing armed, no
+  tag in the spoken text — **and a control arm where the same output on a normal
+  turn does all three**, so the gate cannot pass by being a broken pipe.
+  `[MOTION:]` is deliberately outside the gate: a gesture is not an action on the
+  machine. Refused attempts are logged, because a silent drop would hide the
+  injection.
+- **M5.0.2 — the denylist matches this layout.** `DENIED_PATTERNS` names
+  `hannah-backend/data`, the directory `site/install.sh` clones into; a
+  development checkout keeps `backend/`, so `settings.json` — every provider key
+  in plaintext — was readable there. Widening the pattern to any `backend/data`
+  is not the fix (D3 leaves the workspace root at `/`, so it would hard-deny
+  legitimate work in unrelated projects, unappealably). Instead
+  `HANNAH_AGENT_DENY_DIRS` takes a comma-separated list of absolute directories
+  and the launcher passes the path it already resolved.
+  *Accept*: `PolicyPaths.classify` returns `sensitive: true` for
+  `…/hannah-motion-lab/backend/data/settings.json` in a checkout named
+  `backend/`; add `~/.local/share/hannah-sense` to `DENIED_DIRECTORIES` in the
+  same change.
+  **Accepted in half, and the half is the honest one.** The classify half passes
+  **when the env var names the directory**, which the launcher always does; with
+  nothing in the env var no compiled-in rule covers a checkout named `backend/`,
+  and that residual is pinned as its own golden case in
+  `docs/fixtures/policy-paths.json` rather than left to be rediscovered. The
+  `~/.local/share/hannah-sense` entry **was not added** — the sidecar's
+  `watches.json` is therefore readable by an agent task. KNOWN-GAPS #18.
+- **M5.0.3 — the `ssh` arm.** `fragments()` expanded `sh -c`, heredocs, `xargs`
+  and `find -exec` but had no `ssh` arm: in `ssh host rm -rf /` the command word
+  was `ssh` and the remote payload was never scanned. A second probe of the fix
+  found two more shapes — the `--` end-of-options marker (which also disarmed
+  `sudo -- rm -rf /`) and `ProxyCommand`/`LocalCommand`, which run on *this*
+  machine, so `ssh -o ProxyCommand='rm -rf /' host ls` was local execution
+  wearing an innocent remote `ls`.
+  *Accept*: two tables — the newly-denied invocations, and the false positives
+  the change accepts.
+  **Accepted**: `test/hannah/policy.test.ts` carries three. `caught` (the
+  payload, `sudo`, `mkfs`, the marker, both local-command options); `nowRefused`,
+  which states the price out loud — `ssh host rm -rf /opt` and
+  `ssh deploy sudo systemctl restart nginx` are ordinary deployment work and are
+  now denied from here with no appeal, because the argument rules were written
+  about this machine and now judge the far end too; and `clean`, which pins the
+  shapes that must keep working (tunnels, `-l deploy`, a textbook
+  `ProxyCommand` that really is an `ssh`). `scp`/`rsync` stay uncovered **on
+  purpose and in the test**.
+- **M5.0.4 — the layout drift.** `workspace/hannah` hard-coded the installed repo
+  names, so on a development checkout every path pointed at a directory that does
+  not exist — including `$BACK/.env`, which is why `AGENT_ENABLED` read empty and
+  M5.0.2's launcher mitigation never ran there at all. `agentBridge.test.js` read
+  a sibling `hannah-agent/docs/fixtures/` that does not exist in this layout, so
+  five tests had been failing since the rename.
+  *Accept*: `hannah doctor` prints ✓ for every started service on *this*
+  checkout, and `npm test` loads the fixtures through an overridable path.
+  **Accepted**, with one honest qualifier: the fixture half is unambiguous
+  (`HANNAH_AGENT_FIXTURES`, installed name, then development name; backend
+  `npm test` went 133 ✓ / 5 ✗ to 138 ✓, and a missing fixtures dir now **skips
+  loudly on stderr** rather than passing vacuously). The doctor half was verified
+  for repo resolution in both layouts and for the services actually running when
+  it was run; nobody has stood up the whole stack in one go and photographed nine
+  ✓.
+- **M5.0.5 — `cleanupExpiredSessions` fires `onDelete`.** It deleted from the Map
+  directly, so the 5-minute sweep skipped every hook and every per-session map
+  (orchestrator, agentBridge) leaked on the sessions that expire quietly — which
+  is nearly all of them.
+  *Accept*: a test asserting an `onDelete` hook runs on GC expiry, not only on
+  explicit delete. **Accepted**: `conversationManager.test.js:55`, which calls
+  the sweep rather than `deleteSession`. Keys are collected before deleting,
+  because a hook may mutate the Map.
+
+### P5.1 — The Watch primitive — **DONE 2026-08-27**
+
+Observe only. No screen, no remote, no action. The phase exists to prove she can
+*notice*, and to prove she does not cry wolf.
+
+| Milestone | Status | Evidence |
+| --- | --- | --- |
+| M5.1.1 `hannah-sense` skeleton on :8007 | ✅ | backend `fb11972`; loopback + `unshare -rn` run, below |
+| M5.1.2 capability probe and the ladder | ✅ | backend `e87834e` + agent `9bc40a7`; `docs/fixtures/policy-paths.json`, 23 golden cases |
+| M5.1.3 arming by voice | ✅ | backend `2a5ca4a`; `tests/unit/watchIntent.test.js` |
+| M5.1.4 narration, the inbox and blindness | ✅ **with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8` |
+| M5.1.5 the HUD, and `hannah doctor` | ✅ | frontend `5def674`, `fcd4500`; workspace `c1b5d67` |
+| Exit demo (`sense-trials`) | ⏳ **not a committed trial** | run by hand; it found the latch bug (`33ffbc8`). KNOWN-GAPS #19 |
+
+- **M5.1.1 — the skeleton.** A watch cannot be an agent task (one-hour timebox,
+  one lane, an approval that denies by silence in two minutes) and cannot be a
+  backend loop (the risk tiers, the denylist and the audit trail live on the
+  agent's side). So: the fifth sidecar, with its **own** venv created with
+  `--system-site-packages` — not the shared one, which pins numpy and
+  onnxruntime-gpu for faster-whisper, Kokoro and YOLO and would break the voice
+  in silence. Guards ported from `facade/routes.ts` verbatim, with one deliberate
+  difference: **an empty token closes this sidecar rather than opening it**
+  (`if (!token) return true` is not copied), because a watch is the first
+  primitive here that runs with no human utterance.
+  *Accept*: the socket is loopback, and the process starts and answers `/health`
+  inside `unshare -rn`.
+  **Accepted**, run on 2026-08-27: inside an unprivileged user+network namespace
+  the process starts, `ss` shows `LISTEN 127.0.0.1:8007` and nothing else,
+  `/health` answers `{"healthy":true,"version":"sense.v1","watches":{…}}` — no
+  home path, no username, so AUDIT M22 is not repeated — and an egress probe from
+  the same namespace fails, as it must.
+- **M5.1.2 — the capability probe and the ladder.** R1–R6 (`proc`, `file`,
+  `logmatch`, `gpu`, `port`, `unit`), typed specs only, everything executed
+  through an argv list with `shell=False`. **R0 is absent and it is not an
+  oversight**: R0 is the exit code of a wrapper Hannah started, and in an
+  observe-only phase the sidecar starts nothing, so there is no wrapper to watch;
+  the `sense.v1` enum is R1–R10 and the reason is written in
+  `capability.R0_ABSENT_REASON`. R4 (GPU) is corroborating-only and therefore
+  **not offered** either — arming it alone is a 400, so announcing it would be a
+  promise the POST refuses.
+  *Accept*: arming a watch on `~/.ssh/id_rsa`, on any `*.env` and on
+  `backend/data/settings.json` is refused at `POST /v1/watches` with the **same
+  reason string** the agent's own denial produces, proven by a golden fixture
+  shared with `paths.test.ts`.
+  **Accepted**: the denylist is not copied — `scripts/emit-policy-asset.ts`
+  generates `docs/fixtures/policy-paths.json` from `policy/paths.ts`, the sidecar
+  reads that asset (and fails **closed** without it: R2/R3 report unavailable and
+  any path watch is refused), and `policy-asset.test.ts` plus
+  `sidecar/sense/tests/test_paths_golden.py` re-decide all 23 golden cases on
+  both sides. Checked live against a running sidecar on 2026-08-27:
+  `POST /v1/watches` on `~/.ssh/id_rsa` → `403 {"error":"forbidden","reason":"\"id_rsa\" is a credential-bearing filename"}`,
+  byte-identical to the TypeScript.
+- **M5.1.3 — arming by voice.** `resolveWatchIntent()` runs **before** the
+  `RUN_VERBS` branch — mandatory, because `\brun\b` already swallowed *"check
+  that my training **run** doesn't stop"* and executed it as a command, so the
+  request never reached the model at all.
+  *Accept*: the `[WATCH:]` protocol block is built from the live capability
+  survey at prompt-assembly time; with SSH keys unloaded and no portal grant the
+  assembled system prompt contains no ssh, screen or gui watch vocabulary, and
+  asking for one produces a spoken refusal rather than a watch that fails later.
+  **Accepted**: `watchIntent.test.js` asserts the section offers exactly the five
+  armable rungs and not `gpu`; that the section matches none of
+  `ssh|screen|remote|gui|widget|at-spi|ocr|pixel|button|window` (sliced from the
+  header on purpose — "screen" already appears in `[MOVE: next-screen]`, which
+  has nothing to do with watching); that a remote or screen request is refused in
+  words; and that with the sidecar down there is **no** `[WATCH:]` vocabulary at
+  all. A `[WATCH:]` tag truncated by `max_tokens` no longer reaches the TTS.
+- **M5.1.4 — narration, the inbox and blindness.** One process-wide SSE
+  subscription with `Last-Event-ID` resume and per-watch `seq` dedupe. Three
+  rules are this feature's own: a trip binds to the **session that armed it** and
+  never to `sessions.at(-1)` (reading someone's training traceback to whoever
+  just opened the HUD is a leak); narration is **ephemeral**, so eight hours of
+  watching cannot evict the real conversation from the 10-turn window or record
+  what was observed into `memory.db`; and after `SENSE_BLIND_MS` with no sample
+  the watch is **blind and she says so**.
+  *Accept*: kill the sidecar mid-watch → the spoken line within the threshold;
+  arm, close every session, trip, reattach → the trip is narrated **exactly
+  once**, with its real timestamp. **Accepted**: both are named acceptance blocks
+  in `tests/unit/senseBridge.test.js`.
+  **Deviation, marked in the code (`34aa48e`) rather than left to be read as the
+  plan:** §10 puts the trip inbox in the sidecar; it is in the **backend**. The
+  `sense.v1` contract has no inbox route, and the sidecar knows nothing about
+  sessions or about `attachSession`, which is the delivery condition. The way
+  back is written down beside it.
+  One real bug found by the acceptance run and fixed in `33ffbc8`: **a trip is
+  the transition, not the state of being down.** The scheduler zeroed the streak
+  after firing, so one dead process re-satisfied the debounce every N samples —
+  three trips in 45 s for a single traceback, which at 3am is eighty notices of
+  the same thing. The watch now latches until it reads a healthy sample. That
+  does not replace `maxFires`/cooldown (P5.2): those bound a crash loop, which is
+  many real transitions.
+- **M5.1.5 — the HUD, and the doctor line.** A `watches` store slice merged by
+  `watchId` (the server re-announces on every reconnect, so an appending reducer
+  would duplicate rows), a `WatchPill` row inside the 400 px budget, a
+  `WatchesSection` in `SettingsPanel`, and `GET /api/v1/health` gaining
+  `watches: {armed, degraded, blind, suspended, lastSampleAt}` counted from the
+  sidecar's **rows**, not from config. Not-looking states carry a dashed border
+  as well as a colour, so the difference survives a greyscale screenshot; the
+  fire counter is always visible, because a watch that cried wolf and cannot say
+  so is worse than no watch.
+  *Accept*: at least one vitest covering armed / degraded / blind rendering, and
+  `hannah doctor` answers "is she still watching?" without opening the HUD.
+  **Accepted**: `tests/watchPill.test.js` + `tests/watchesStore.test.js`
+  (frontend 22 ✓); the doctor half landed later, with the launcher work — a
+  `vigilancia:` line reading the sidecar's open `/health`, verified live against
+  a real sidecar with one armed watch. It matters because `sense.v1` has **no
+  heartbeat event**: four quiet hours and four blind hours look identical from
+  outside, and this counter is what separates them.
+
+**Exit demo — not accepted as a repeatable trial.** The bar is `sense-trials`:
+a real child appending to a log, `SIGKILL` at *t*+N, a trip asserted within
+`period × DEBOUNCE_N + slack`, **and** a control arm where the child is never
+killed and emits zero trips. The acceptance run happened by hand (it is what
+found the latch bug above), and the control arm exists as a unit test with the
+`stub` sensor (`test_scheduler.py::test_el_stub_no_dispara_nunca`, asserting
+zero events and zero fires over ten healthy samples). What does not exist is the
+committed script that does both against a real process. KNOWN-GAPS #19.
+
+**Verification, 2026-08-27** (whole stack, after the launcher work): backend
+`npm test` **203 ✓ / 17 suites, 0 failures** · `sidecar/sense` pytest **90 ✓** ·
+frontend `vitest run` **22 ✓ / 3 files** · agent `bun test test/hannah/`
+**331 ✓ / 12 files** · `bash -n` on the launcher and the installer ·
+`hannah doctor` on this checkout · the `unshare -rn` run above · a live arm,
+`hannah doctor`, and `hannah stop` against a real sidecar on :8007.
+
+**What P5.1 owes, and did not deliver.** ADR-0013 (the watch as a sensor
+sidecar: placement, the observe/act split, why not a task and why not the
+backend) is not written, and SECURITY.md has no T9–T12 rows and no `sense.*`
+risk tiering in §4. The behaviour those documents describe is implemented and
+tested; the decision record is missing, which is exactly the drift the
+docs-with-code rule exists to prevent. KNOWN-GAPS #21.
+
+### P5.2 and beyond — not started
+
+- **P5.2 — acting on a trip, ask first.** `origin` and `approvalTimeoutMs` on
+  `CreateTaskInput`; A1 asks by dispatching a short agent task whose only job is
+  to ask, so it inherits `task.question`, the HUD, the audit trail and the
+  narration queue; `maxFires`, exponential cooldown and a `flock` single-instance
+  guard **before** any capability; AUDIT M16's growth deferral closed, since a
+  re-arming watch is an unbounded stream of short tasks.
+- **P5.3 — the remote case.** Blocked on M5.0.3, which is done. One multiplexed
+  connection to one validated alias, `BatchMode=yes`, refuse to arm when
+  `ssh-add -l` is empty. A remote act is always `high` and never grant-covered.
+- **P5.4 — standing grants. Blocked on M4.1 and M4.6**, not merely sequenced
+  after them: it is autonomous execution, and SECURITY §8 already governs it.
+- **P5.5 — screen perception**, spike first (ADR-0015), ships disabled, never
+  auto-resumes. **P5.6 — GUI actuation**, where A4 (an app's own CLI) is the
+  realistic answer far more often than AT-SPI. **P5.7 — browser**, fresh-profile
+  mode only.
 
 ---
 

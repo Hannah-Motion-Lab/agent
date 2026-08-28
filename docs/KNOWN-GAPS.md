@@ -1,6 +1,7 @@
 # Known gaps
 
 > Status: opened 2026-08-22 after M3.4; #4 and #12 closed in M3.6 the same day.
+> #16–#21 added 2026-08-27 by P5.0/P5.1 (the watches — see ROADMAP Phase 5).
 > Reviewed at every phase boundary; an entry leaves only when it is closed or
 > explicitly accepted.
 
@@ -29,6 +30,12 @@ where the work is knowingly incomplete.
 | ~~12~~ | ~~The avatar is idle while the hands work~~ | — | — | **closed in M3.6** |
 | [13](#13) | ~1,370 `opencode` strings in prose | Deliberate | — | ADR-0009 stage 2 |
 | [14](#14) | Duplicate `@hannah/Image` service tag | Deliberate | ~1 h | If it ever bites |
+| [16](#16) | R0 (a wrapper's exit code) is not implemented | Design | ~1 d | P5.2, when she can start what she watches |
+| [17](#17) | R6b, R7, R8, R9, R10 are not built | Their phases | ~8 wks | P5.3 / P5.5 / P5.6 |
+| [18](#18) | `~/.local/share/hannah-sense` is not on the denylist | Nothing | ~30 m | Now; it was M5.0.2's own second half |
+| [19](#19) | The P5.1 exit demo is not a committed trial | Nothing | ~4 h | Before P5.2 adds acting to it |
+| [20](#20) | The trip inbox is in the backend, not the sidecar | Contract | ~1 d | A second backend, or a second HUD host |
+| [21](#21) | P5.1 shipped without ADR-0013 and without SECURITY T9–T12 | Nothing | ~3 h | Before P5.2 changes the façade contract |
 
 ---
 
@@ -277,3 +284,128 @@ while she speaks, what she is saying wins.
 
 Remaining edge: `SmplxAvatar`, the debug rig, ignores posture. Worth doing only
 if that rig stops being debug-only.
+
+---
+
+## The watches (P5.0 / P5.1, 2026-08-27)
+
+Nothing here is a defect in what shipped. They are the edges the watch primitive
+was built up to and deliberately stopped at, plus one thing its own milestone
+asked for and did not get.
+
+### 16
+**R0 is not implemented.** The cheapest and only *certain* rung — the exit code
+of a wrapper Hannah started — is absent from the ladder. Not an oversight: in an
+observe-only phase the sidecar starts nothing, so there is no wrapper whose exit
+code there would be to read. The `sense.v1` contract fixes the rung enum at
+R1–R10 and the row is simply not emitted; the reason is in
+`capability.R0_ABSENT_REASON` and in the sidecar's README, so nobody has to infer
+it from an absence.
+
+*Consequence, stated.* Every rung she can actually arm today is an *inference*
+from the outside — a PID, an mtime, a pattern, a port. R0 is the one that cannot
+be wrong, and she does not have it.
+
+*Approach.* It arrives with P5.2, where a trip can dispatch: the same frozen
+command that would be re-run is the one worth wrapping in the first place. The
+wrapper has to be started **by the agent**, not by the sidecar, or rule R1 is
+broken on day one.
+
+### 17
+**Five rungs of the ladder are not built.** R6b (any of R1–R6 over SSH), R7
+(AT-SPI), R8 (a screen region's hash), R9 (OCR), R10 (a local VLM).
+`/v1/capabilities` reports each one unavailable **with the milestone that brings
+it**, not with "not implemented" — an operator asking is trying to tell a bug
+from a calendar. And the catalog rule holds: a rung that is not available is
+absent from the assembled `[WATCH:]` vocabulary, so she cannot promise one.
+
+R4 (GPU) is a different case and worth not confusing with these: the sensor
+**exists** and the rung is deliberately unavailable, because it corroborates and
+may never trip a watch alone (checkpointing and dataloader stalls both read 0 %).
+It becomes available when P5.2 brings multi-sensor watches.
+
+*Trigger.* Their own phases: P5.3 for the remote case (blocked on nothing now
+that M5.0.3 is done), P5.5 for the pixels (spike first, ships disabled), P5.6 for
+AT-SPI (spike first, and the honest answer to most GUI cases is A4 — the
+application's own CLI — not a synthetic click).
+
+### 18
+**`~/.local/share/hannah-sense` was never added to `DENIED_DIRECTORIES`.**
+M5.0.2 asked for it in the same change as the `hannah-backend/data` fix and only
+the second half landed. The sidecar's state directory is 0700 with 0600 files and
+holds `watches.json`: the label the user spoke, the sensor kind, the path being
+watched, the owning session id. An agent task can read all of it with `read` or
+`bash`.
+
+*Why it still matters even though it holds no credential.* The path a watch names
+is often the interesting one — a log under a private project, a unit name, a
+port. And it is the same class of file as `~/.local/share/hannah-agent`, which is
+denied precisely so a task cannot read the machinery watching it.
+
+*Approach.* One line in `policy/paths.ts` beside the `hannah-agent` entries, plus
+`watches.json` (and, when they exist, `grants.json` and `portal-token`) in
+`DENIED_BASENAMES`, then regenerate `docs/fixtures/policy-paths.json` — the
+golden asset test fails until it is regenerated, which is the point of it.
+
+*Trigger.* Now. It is thirty minutes and it was already agreed.
+
+### 19
+**The P5.1 exit demo is not a committed trial.** The bar was `sense-trials`: a
+real child appending to a log, `SIGKILL` at *t*+N, a trip asserted within
+`period × DEBOUNCE_N + slack`, **and** a control arm where the child is never
+killed and must emit zero trips. That run happened by hand and earned its keep —
+it is what found the latch bug (one dead process tripping three times in 45 s).
+What is missing is the script.
+
+*What exists instead.* The control arm as a unit test with the `stub` sensor
+(`test_scheduler.py::test_el_stub_no_dispara_nunca`: ten healthy samples, zero
+events, zero fires), and scheduler tests for the debounce, the latch, blindness,
+recovery, faults and the clock-jump re-baseline. All of them drive the scheduler
+directly with fake time.
+
+*Why the script still matters.* Everything above proves the *decision*; none of
+it proves the sampling of a real process at a real period. The repo has been here
+before — `macro-trials.ts` exists because a check that merely looks for "the task
+completed" passes while doing nothing.
+
+*Trigger.* Before P5.2. The moment a trip can dispatch, "did it notice?" and "did
+it notice **once**?" stop being the same question.
+
+### 20
+**The trip inbox lives in the backend, not in the sidecar.** `VIGILANCE.md` §10
+puts the durable inbox in `hannah-sense`; it is in `senseBridge.js`, writing
+under the backend's `data/`. Marked in the code (backend `34aa48e`) rather than
+left to be read later as though the plan had said so.
+
+*Why.* The `sense.v1` contract has no inbox route, and the sidecar knows nothing
+about sessions or about `attachSession` — which is the delivery condition for a
+trip that happened while nobody was there. Putting it in the sidecar means either
+teaching it the session model or adding a route that exists for one consumer.
+
+*What it costs.* A trip survives a sidecar restart and a HUD reload, but not a
+backend reinstall that wipes `data/`, and a second backend against the same
+sidecar would each keep their own. Neither is a shape this product has today.
+
+*Trigger.* A second backend host, or a second HUD host, or `sense.v1` growing an
+inbox route for another reason.
+
+### 21
+**P5.1 shipped without ADR-0013 and without the SECURITY rows it promised.**
+`VIGILANCE.md` §14 lists ADR-0013 (the watch as a sensor sidecar: placement, the
+observe/act split, why not a task and why not a backend loop) and four new threat
+rows T9–T12 with `sense.*` risk tiering in SECURITY §4. Neither is written.
+
+*Why it matters more than the usual doc debt.* The reasoning is currently spread
+across commit messages, module headers and this roadmap. The `sense.*` tiering in
+particular is a decision with teeth — the plan requires `sense.screen` and
+`sense.remote` to be `high` **by name**, so that no unknown key can fall through
+to `low`, which is the tier a spoken "sí" can grant (the same shape M3.3 closed
+for MCP). The code has no `sense.*` permission key yet because nothing asks for
+one; the day something does, the table has to already say `high`.
+
+*Approach.* ADR-0013 from the material in ROADMAP Phase 5 and the sidecar's
+module headers. SECURITY §3 gains T9–T12, §4 gains the split rows, §6 gains the
+"evidence frames are never persisted" asset class.
+
+*Trigger.* Before P5.2 touches the façade contract — that milestone amends
+INTEGRATION §2/§3 anyway, and one doc pass is cheaper than two.
