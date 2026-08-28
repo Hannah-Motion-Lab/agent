@@ -1081,7 +1081,10 @@ milestone below carries its own correction, in the tense it happened.
   **unknown** state failing towards not-looking; a disarmed row that no longer
   offers to disarm but still says how many times it cried wolf; and the terminal
   row's own countdown (`tests/watchPill.test.js`, `tests/watchesStore.test.js`,
-  `tests/watchesPanel.test.js` — frontend 34 ✓ / 4 files, re-run for this note).
+  `tests/watchesPanel.test.js` — frontend 34 ✓ / 4 files when this note was
+  written; **44 ✓ / 5 files** on 2026-08-28, the fifth being
+  `tests/watchSocket.test.js`, which round three added because the socket's
+  field list was not covered end to end by anything).
   **Correction: the panel half of the milestone was never executed against a real
   backend.** As merged, `WatchesSection` fetched `GET /api/v1/watches` — the one
   route in this backend that answers **403 to anything carrying `Origin`** and 401
