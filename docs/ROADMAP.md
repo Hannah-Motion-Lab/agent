@@ -41,7 +41,7 @@ notes below. A caveat mentioned once is a caveat that has been lost.
 | **P2** | Backend bridge — voice-driven hands | ~4 wks | **done 2026-08-21** | Scenarios S1–S4 (`npm run demo:agent`) |
 | **P3** | Desktop macro layer | ~6 wks | **done 2026-08-22** | 10 macros + task history + embodiment |
 | **P4** | Autonomy, hardening, packaging | ~6 wks | Q1 2027 | Hannah runs as a service; v1.0 |
-| **P5** | Vigilance — a standing state of attention | ~16 wks | P5.0 + P5.1 **done 2026-08-27**, P5.1 verified and corrected the same day and **its exit demo is still not a committed trial**; P5.2 next, P5.4 blocked on M4.1 + M4.6 | A training run killed by hand: she notices, says the right sentence, and the control arm says nothing |
+| **P5** | Vigilance — a standing state of attention | ~16 wks | P5.0 + P5.1 **milestones done 2026-08-27**, P5.1 then verified and corrected through **four rounds** (2026-08-27 and 2026-08-28) and **its exit demo is still not a committed trial**; P5.2 next, P5.4 blocked on M4.1 + M4.6 | A training run killed by hand: she notices, says the right sentence, and the control arm says nothing |
 
 Rules of engagement:
 
@@ -852,22 +852,26 @@ layout drift. Each one was verified against the checkout before it was fixed.
   the sweep rather than `deleteSession`. Keys are collected before deleting,
   because a hook may mutate the Map.
 
-### P5.1 — The Watch primitive — **DONE 2026-08-27**
+### P5.1 — The Watch primitive — **milestones DONE 2026-08-27, exit demo not**
 
 Observe only. No screen, no remote, no action. The phase exists to prove she can
 *notice*, and to prove she does not cry wolf.
 
 | Milestone | Status | Evidence |
 | --- | --- | --- |
-| M5.1.1 `hannah-sense` skeleton on :8007 | ✅ | backend `fb11972`; loopback + `unshare -rn` run, below |
-| M5.1.2 capability probe and the ladder | ✅ **after a correction** | backend `e87834e`, `5a175ae`, `ad8d905` + agent `9bc40a7`, `7114f6d`; `docs/fixtures/policy-paths.json`, 31 golden cases |
-| M5.1.3 arming by voice | ✅ **after a correction** | backend `2a5ca4a`, `96dfe1d`, `680c1c6`, `72d63bf`; `tests/unit/watchIntent.test.js` |
-| M5.1.4 narration, the inbox and blindness | ✅ **after two corrections, and with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8`, `fdb2f32`, `d377e6d`, `1a231ff` |
-| M5.1.5 the HUD, and `hannah doctor` | ✅ **after a correction** | frontend `5def674`, `fcd4500`, `fa8c276`, `842016d`; backend `3be949f`; workspace `c1b5d67` |
-| Exit demo (`sense-trials`) | ⏳ **not a committed trial** | run by hand; it found the latch bug (`33ffbc8`). KNOWN-GAPS #19 |
+| M5.1.1 `hannah-sense` skeleton on :8007 | ✅ **its guards untested until later** | backend `fb11972`, `8aca0f2`; loopback + `unshare -rn` run, below |
+| M5.1.2 capability probe and the ladder | ✅ **after two corrections** | backend `e87834e`, `5a175ae`, `ad8d905`, `f65b703` + agent `9bc40a7`, `7114f6d`; `docs/fixtures/policy-paths.json`, 31 golden cases |
+| M5.1.3 arming by voice | ✅ **after four corrections, two of them on the label** | backend `2a5ca4a`, `96dfe1d`, `680c1c6`, `72d63bf`, `8156c70`; `tests/unit/watchIntent.test.js` |
+| M5.1.4 narration, the inbox and blindness | ✅ **after twelve corrections, and with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8`, `fdb2f32`, `d377e6d`, `1a231ff`, `742339d`, `422171f`, `ce847d4`, `7bed4d9`, `1db1110`, `34f63ce`, `bb672d1`, `922333e`, `f460ee7` |
+| M5.1.5 the HUD, and `hannah doctor` | ✅ **after three corrections** | frontend `5def674`, `fcd4500`, `fa8c276`, `842016d`, `6f35661`, `fe62bd3`; backend `3be949f`; workspace `c1b5d67` |
+| Exit demo (`sense-trials`) | ⏳ **still not a committed trial after four rounds** | run by hand; it found the latch bug (`33ffbc8`). KNOWN-GAPS #19 |
 
 **The phase was verified independently after it was called done, and it did not
-all hold.** The fixes are thirteen commits across the three repos (backend
+all hold** — three times over, on 2026-08-27 and again on 2026-08-28. The first
+round is what the rest of this section is written against; the two that followed
+have their own block below: fourteen more commits, four of which are round four
+correcting the subsystem round three had just introduced.
+The first round's fixes are thirteen commits across the three repos (backend
 `fdb2f32`…`3be949f`, agent `7114f6d`, frontend `fa8c276`, `842016d`).
 **One claim was written in three places and was false in all three**: the
 delivery rule — a trip binds to the session that armed it, never to
@@ -1050,8 +1054,10 @@ milestone below carries its own correction, in the tense it happened.
   treated as a new connection (the whole ring, `truncated=true`) and the watermark
   comes from the ring and never from the client, which with an empty ring had been
   eating the first 500 events (backend `1a231ff`). The resume comment now carries
-  `boot=` so a client can drop a stale cursor; **the backend does not read it
-  yet** — KNOWN-GAPS #23.
+  `boot=` so a client can drop a stale cursor. **"The backend does not read it
+  yet" was true when this line was written and is false now** — it reads it, and
+  the two rounds that made it read it are below. KNOWN-GAPS #23 has been rewritten
+  onto what those rounds left, which is a different gap of the same family.
 - **M5.1.5 — the HUD, and the doctor line.** A `watches` store slice merged by
   `watchId` (the server re-announces on every reconnect, so an appending reducer
   would duplicate rows), a `WatchPill` row inside the 400 px budget, a
@@ -1108,7 +1114,7 @@ found the latch bug above), and the control arm exists as a unit test with the
 zero events and zero fires over ten healthy samples). What does not exist is the
 committed script that does both against a real process. KNOWN-GAPS #19.
 
-**Verification, 2026-08-27** (whole stack, after the launcher work): backend
+**Verification, 2026-08-27** (whole stack, after the launcher work; superseded — the current numbers are at the end of this section): backend
 `npm test` **203 ✓ / 17 suites, 0 failures** · `sidecar/sense` pytest **90 ✓** ·
 frontend `vitest run` **22 ✓ / 3 files** · agent `bun test test/hannah/`
 **331 ✓ / 12 files** · `bash -n` on the launcher and the installer ·
@@ -1116,7 +1122,8 @@ frontend `vitest run` **22 ✓ / 3 files** · agent `bun test test/hannah/`
 `hannah doctor`, and `hannah stop` against a real sidecar on :8007.
 
 **Verification, 2026-08-27, after the independent pass and its thirteen fixes**
-— re-run for this note rather than quoted from a commit: backend `npm test`
+— re-run for that note rather than quoted from a commit, and **superseded** by
+the 2026-08-28 run at the end of this section: backend `npm test`
 **216 ✓ / 18 suites, 0 failures** · `sidecar/sense` pytest **120 ✓** · frontend
 `vitest run` **34 ✓ / 4 files** · agent `bun test test/hannah/`
 **341 ✓ / 12 files**. The Python suite is the number worth reading twice. It had
@@ -1129,15 +1136,78 @@ them (backend `9308315`). They are deliberately still **not** chained into
 venv" must not read as a red suite, so the runner is named in both READMEs
 instead, which is what makes it discoverable.
 
+**Two more rounds, 2026-08-28, and they were not small.** The phase was verified
+twice more by people who had not built it. **Round three** was run against a live
+stack whose model provider was genuinely failing, which is why half of what it
+found is about what happens when the voice cannot speak; it took the phase's
+blocker and its highs, and it introduced a subsystem that had not existed before,
+**restart detection**. **Round four** found four defects and every one of them was
+inside that new subsystem — which is the ordinary shape of this: a fix is a new
+place for a defect to live. Fourteen commits, twelve in `backend/` and two in
+`frontend/`.
+
+| Fix | Round | What it was |
+| --- | --- | --- |
+| backend `1db1110` | 3 | **A sidecar restart passed in complete silence.** `scheduler.shutdown()` publishes `watch.disarmed {reason:"shutdown"}` during FastAPI's lifespan, but `sse_starlette` kills every `EventSourceResponse` the moment `SIGTERM` lands, which is *before* that publish; `kill -9` publishes nothing at all; and the ring dies with the process, so nothing replays either. A one-second `systemctl restart` is far under `SENSE_BLIND_MS`, so the blindness clock never wakes: the backend reconnects, the stream returns to `up`, reconciliation writes `suspended`, and the person who armed the watch goes on believing she is being looked at. The subscription now reads `boot=` off the welcome comment — a different boot *is* the proof, because A4 says what was persisted comes back `suspended` and never armed |
+| backend `ce847d4` | 3 | **the label went to every attached HUD.** Security; AUDIT V3 |
+| backend `8156c70` | 3 | **the label reached the model on every trip.** Security; AUDIT V4 |
+| backend `422171f` | 3 | **an orphan trip was read aloud to a stranger.** Security; AUDIT V5 |
+| backend `7bed4d9` | 3 | **the give-up notice was broadcast with another session's label.** Security; AUDIT V6 |
+| backend `742339d` | 3 | **a trip left the inbox before anybody knew it had been said.** `processTextTurn` catches its own errors, so with the model down it resolved all the same and the narration counted as delivered: the trip came out of the inbox, the file was left empty, and nobody ever heard anything. `processTextTurn` now returns whether it **spoke**, the narration queue answers that back to whoever queued it, and a trip is written to disk *before* speaking and erased only on the acknowledgement. Repeating a sentence is chosen over losing one |
+| backend `8aca0f2` | 3 | the sidecar's `main.py` and `registry.py` had **no tests at all**, and in a working copy three mutations left the entire suite green: the `Origin` 403 turned into a no-op, an empty token opening every route (the deliberate divergence from the façade), and persisted rows loaded as `armed` instead of `suspended`, which is assumption A4 itself. The guards are now tested by *effect* and not by status code — a 403 that arms the watch anyway is the bug an assertion on the code cannot see |
+| backend `f65b703` | 3 | the two load-bearing pieces of `open_watched()` — the fix for V2 — had nothing asserting them: removing `O_NOFOLLOW` left the suite green, and so did removing the `" (deleted)"` suffix strip, though both are named in the code as what holds the guarantee. Without the strip the basename rules stop matching, so a well-placed `unlink` skips the verification entirely |
+| frontend `6f35661` | 3 | the HUD dropped fields off `watch_armed`. `sensorKind` is sent on purpose — without it a panel row cannot say what she is looking *with* — and the field list omitted it, so `row.sensorKind` was empty forever and the suffix never painted, with both sides believing the field travelled. The list is an exported function now, which is what makes it testable end to end, and it copies `mine` as well |
+| frontend `fe62bd3` | 3 | the panel separated knowing from not knowing on a single axis, the socket. With the socket attached and the sidecar down, `GET /api/v1/health` was already answering `watches.error = sense_unavailable` and the view discarded that field: it wrote *"Nada vigilado ahora mismo"* over two watches that existed on the other side. It is the same failure as `fa8c276`, one axis further out |
+| backend `34f63ce` | 4 | reconciling towards `if (w.state !== 'blind') goVisible(w)` counted a **`suspended`** row as recovered — and `suspended` is precisely the row that comes back from a sidecar restart and samples nothing. The person heard *"la perdí"* and immediately *"ya la veo de nuevo"*, with the HUD showing suspended and `/health` at `armed:0`; the second sentence is the one that stays. Recovery is being `armed` now, and what each state of a row means is written where it is decided |
+| backend `bb672d1` | 4 | **a restart with the HUD closed was never counted at all.** The SSE client was fabricating one `watch.disarmed shutdown` per watch it had seen armed, and that event left no state behind: reconciliation overwrote the row to `suspended`, which the attach retry did not look at. So the headline case of §10 — 3am, tab closed — went unsaid. The client only announces now, and the bridge decides in one place: every non-terminal row goes dark, it is said on the way back, the `seq` that was silently swallowing the new boot's first event is reset, and what the sidecar no longer has is terminated instead of left as a zombie |
+| backend `922333e` | 4 | **a trip already spoken was re-filed on every backend start.** `GET /v1/events` with no `Last-Event-ID` replays the whole ring as live events, and `senseClient` starts with `lastId` at null in every process, so the inbox went 3 → 7 → 10 on ghosts, shouting *"buzón lleno"* — the one alarm that must mean a real trip was lost — and leaving `/health` at `pending:10` without a single uncounted trip, so `hannah doctor` was lying too. The bridge now stores `(boot, cursor)` beside the inbox and discards what an earlier run of itself already handled; the pair travels together because the sidecar's cursor returns to zero on each of *its* boots |
+| backend `f460ee7` | 4 | **a trip that gave up was never retried, even once the voice came back.** The attempt ceiling said it counted *consecutive* failures, but its only reset was the positive acknowledgement of **another** inbox row — unreachable when the trip that gave up is the only one stored, which is the normal case, since `SENSE_MAX_WATCHES` is 2 and a trip is rare. Three HUD reloads during a provider 401 therefore silenced a real 3am trip forever, while it went on being counted as pending. The orchestrator now marks every sentence that genuinely leaves with its audio, and that proof reopens the trip and delivers it on the spot. Giving up also became visible: `undelivered` on the notice to its owner, `stalled` in `/api/v1/health` |
+
+**The rule that has now been broken three rounds running, and what round four did
+about it.** Round one wrote three things into this roadmap that the code did not
+do. Round two asserted the delivery rule in a commit message, a test title and a
+milestone while the code did the opposite. **Round three shipped
+`tests/unit/senseRestart.test.js` with a filter in it** —
+`const perdida = () => narrated.filter(n => /LOST SIGHT/.test(n.prompt))` — under
+a docstring calling what it filtered out a neighbouring defect fixable in one
+line, while the test's own title claimed *"a one-second restart does not leave the
+person believing she is being watched"* and the person was left believing exactly
+that. Round four removed the filter and made the test **assert** the sentence
+(`34f63ce`). A test may never be shaped to pass around a defect its title claims
+to cover; if it cannot be fixed in scope, the title has to stop claiming it.
+
+**What round four leaves open, and it is the last automated round.** Three
+residuals are filed rather than fixed, each in `agent/docs/KNOWN-GAPS.md`:
+`senseBridge.snapshot()` still exports the raw label and the arming `sessionId`
+and has no production caller, which is `ce847d4` waiting to be re-opened by
+whoever wants a watch list in `/api/v1/health` (#24); a refused `[WATCH:]` writes
+the **watched path** into the launcher's log, which is the one road out that
+`72d63bf` did not close (#25); and a trip whose owner never comes back is now
+never spoken to anybody, which is §10 honoured without a hedge and also a person
+who is never told (#26). #23 is rewritten: what it described is closed, and what
+remains is that the sidecar's ring has no delivery acknowledgement, so replay
+protection is one file in `backend/data/`.
+
+**Verification, 2026-08-28, re-run for this note and not copied from anybody:**
+backend `npm test` **242 ✓ / 19 suites, 0 failures** · `backend/sidecar/sense`
+`npm run test:sense` **192 ✓ / 8 files** · frontend `vitest run` **44 ✓ / 5
+files**, `eslint` clean, `vite build` clean · agent `bun test test/hannah/`
+**341 ✓ / 12 files**. The three numbers this file carried before — 216 / 18
+suites, 120, 34 / 4 files — were true of the round that wrote them and are the
+state of nothing now; the agent's 341 is unchanged, because rounds three and four
+did not touch that repo's code.
+
 **What P5.1 owes, and did not deliver.** ADR-0013 (the watch as a sensor
 sidecar: placement, the observe/act split, why not a task and why not the
 backend) is not written, and SECURITY.md has no T9–T12 rows and no `sense.*`
 risk tiering in §4. The behaviour those documents describe is implemented and
 tested; the decision record is missing, which is exactly the drift the
-docs-with-code rule exists to prevent. KNOWN-GAPS #21. The verification pass adds
-three more open items and does not close that one: the symlink residual
-(#22), the SSE boot id the backend still ignores (#23), and INTEGRATION §4.5,
-which is written now and was owed from the day the wire types existed.
+docs-with-code rule exists to prevent. KNOWN-GAPS #21, **still open after four
+rounds** — nothing since has written ADR-0013 or the SECURITY rows. The first
+verification pass added the symlink residual (#22), the SSE boot id (#23) and
+INTEGRATION §4.5, which is written now and was owed from the day the wire types
+existed. **#23 as it was written is closed** (see the two rounds below); it now
+carries what those rounds left. The rounds of 2026-08-28 add #24, #25 and #26.
 
 ### P5.2 and beyond — not started
 
