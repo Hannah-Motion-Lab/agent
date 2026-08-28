@@ -862,7 +862,7 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
 | M5.1.1 `hannah-sense` skeleton on :8007 | ✅ **its guards untested until later** | backend `fb11972`, `8aca0f2`; loopback + `unshare -rn` run, below |
 | M5.1.2 capability probe and the ladder | ✅ **after two corrections** | backend `e87834e`, `5a175ae`, `ad8d905`, `f65b703` + agent `9bc40a7`, `7114f6d`; `docs/fixtures/policy-paths.json`, 31 golden cases |
 | M5.1.3 arming by voice | ✅ **after four corrections, two of them on the label** | backend `2a5ca4a`, `96dfe1d`, `680c1c6`, `72d63bf`, `8156c70`; `tests/unit/watchIntent.test.js` |
-| M5.1.4 narration, the inbox and blindness | ✅ **after twelve corrections, and with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8`, `fdb2f32`, `d377e6d`, `1a231ff`, `742339d`, `422171f`, `ce847d4`, `7bed4d9`, `1db1110`, `34f63ce`, `bb672d1`, `922333e`, `f460ee7` |
+| M5.1.4 narration, the inbox and blindness | ✅ **corrected in all four rounds, and with a marked deviation** | backend `91c232c`, `34aa48e`, `33ffbc8`, `fdb2f32`, `d377e6d`, `1a231ff`, `742339d`, `422171f`, `ce847d4`, `7bed4d9`, `1db1110`, `34f63ce`, `bb672d1`, `922333e`, `f460ee7` |
 | M5.1.5 the HUD, and `hannah doctor` | ✅ **after three corrections** | frontend `5def674`, `fcd4500`, `fa8c276`, `842016d`, `6f35661`, `fe62bd3`; backend `3be949f`; workspace `c1b5d67` |
 | Exit demo (`sense-trials`) | ⏳ **still not a committed trial after four rounds** | run by hand; it found the latch bug (`33ffbc8`). KNOWN-GAPS #19 |
 
