@@ -47,7 +47,7 @@ where the work is knowingly incomplete.
 | [24](#24) | `senseBridge.snapshot()` exports the raw label and `sessionId`, uncalled | Nothing | ~15 m | Whoever puts watches into health or a broadcast |
 | [25](#25) | A refused `[WATCH:]` writes the watched path into the launcher log | Nothing | ~1 h | P5.2, or the first time that log is shared |
 | [26](#26) | An orphaned trip is never spoken to anybody | Product | ~1 d | P5.2 |
-| [27](#27) | The macOS and Windows launchers and installers know nothing about `hannah-sense` | Product | ~4 h | The first watch armed off Linux |
+| [27](#27) | Closed 2026-08-28: the macOS and Windows launchers and installers now carry `hannah-sense` (R1/R5 ported: pgrep+lsof on macOS, psutil on Windows) | Product | done | A real arm on a Mac or a Windows box |
 
 ---
 
@@ -706,33 +706,27 @@ line that names no label and asks the person to open the HUD.
 ---
 
 ### 27
-**On macOS and Windows the watch sidecar is neither installed nor started, and
-nothing says so out loud.**
-`site/install-mac.sh` and `site/install.ps1` create no `sense` venv, and
-`workspace/hannah-mac` and `workspace/hannah.ps1` never start `:8007`; only
-`install.sh` and the Linux `hannah` do. Verified by grep on all four: zero
-mentions of `sense` or `8007`.
+**Closed on 2026-08-28.** The watch sidecar now ships on macOS and Windows too.
+What was done, so the next reader does not re-derive it:
 
-*Why it is not a bug today.* P5.1 is Linux-only on purpose. VISION.md's non-goals
-say "Not Windows/macOS, for now", the sensors reach for `pgrep`, `ss`,
-`systemctl` and `nvidia-smi`, and `SENSE_ENABLED` is `false` everywhere. On those
-two platforms the backend simply never talks to `:8007`, the capability survey
-comes back empty, and the `[WATCH:]` block is therefore absent from the system
-prompt: **she does not offer what she cannot do**, which is the catalog rule
-working exactly as intended, not a hole.
+- `capability.py` knows the platform (`platform()`, `pin_platform()` for tests) and keeps one
+  tool table per OS (`PLATFORM_TOOLS`): R1 is `pgrep` on Linux/macOS and psutil on Windows;
+  R5 is `ss` on Linux, `lsof` on macOS (`-t`, PIDs only: no address leaves the sensor) and
+  psutil on Windows; R6 needs `systemctl` and its reason now says "solo existe en Linux".
+  A `python:<module>` "tool" resolves through `importlib.util.find_spec`, same cache, same
+  injectable resolver.
+- `sensors/base.py`: `O_NOFOLLOW`/`O_NONBLOCK` are optional flags (they do not exist on
+  Windows), and the post-open verification asks the kernel for the opened name on Linux
+  (`/proc/self/fd`) and macOS (`F_GETPATH`); on Windows it compares device+inode of the
+  opened file against the classified path and fails closed on mismatch.
+- `install-mac.sh` / `install.ps1` create the `sense` venv (a plain one: `--system-site-packages`
+  is a Linux need for `gi`/`dbus`); `hannah-mac` / `hannah.ps1` generate `HANNAH_SENSE_TOKEN`,
+  start `:8007` before the backend when `SENSE_ENABLED=true`, show the watch counts in
+  `doctor`, and pass `HANNAH_AGENT_DENY_DIRS` to the agent like the Linux launcher does.
+- `tests/test_platforms.py` exercises both paths from Linux with the platform pinned and a
+  fake psutil; the Windows path was also run against the real psutil on Linux.
 
-*Why it is written down anyway.* Because the degradation is silent in the one
-place it should not be: someone who sets `SENSE_ENABLED=true` on a Mac gets a
-backend that quietly cannot reach a sidecar nobody installed. It cost nothing to
-be honest here, and this file's own rule is that a caveat living only in a commit
-message has been lost. That is where it lived until now: the merge commits
-`workspace 688f6d2` and `site f96d2a3` mention it and nothing else did.
-
-*Approach.* Either port the sensors that are portable (`pgrep`/`ss` have
-equivalents; `systemctl` and `nvidia-smi` do not) and add the venv plus the start
-block to the four files, or make the refusal explicit: `hannah doctor` and the
-`sense` health probe should say "not on this platform" rather than "not
-answering", which are different sentences and only one of them is true.
-
-*Trigger.* The first watch someone tries to arm off Linux, or the moment P5.5's
-screen tier makes the platform question real rather than theoretical.
+*What is still true.* R6 (systemd units and journal) is Linux by nature and is announced as
+unavailable elsewhere; the screen and AT-SPI rungs (P5.5, P5.6) remain Linux-first. Neither
+launcher nor sidecar has been run on a real Mac or Windows box yet: the first arm off Linux is
+the test that matters.
