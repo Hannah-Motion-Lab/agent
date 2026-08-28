@@ -618,7 +618,20 @@ row, its state and its sensor kind and **not** the words its owner dictated
 (`ce847d4`); the trip and the give-up notice go to the owning session or to the
 inbox, never to a broadcast (`422171f`, `7bed4d9`); the label reaches the model
 through `watchLabel()` on both of its roads (`680c1c6`, `8156c70`); and
-`api/watches.js` returns a hand-written whitelist. `snapshot()` is the exit that
+`api/watches.js` returns a hand-written whitelist.
+
+> **This paragraph claimed completeness on 2026-08-28 and was wrong the same
+> day.** The final verification of that round found two exits it had missed,
+> both carrying the owner's words to a non-owner and both reproduced live: the
+> four state phrases (`blind`, `recovered`, `expired`, `faulted`) went through
+> `currentListener()`, which falls back to any attached session, and spoke the
+> label aloud to a stranger while the *same* envelope blanked those words on that
+> stranger's screen; and `watchStatus()` listed every watch in the process into
+> the system prompt of every session's every turn. Closed in `d95efc6`: a
+> non-owner now hears the fact without the words, and `watchStatus()` filters by
+> owner and emits nothing without a `sessionId`. The lesson is the entry's own:
+> counting the exits is not the same as finding them, and this file should say
+> which ones were checked rather than that all of them were. `snapshot()` is the exit that
 was not narrowed, because it has no production caller — `api/health.js` imports
 `watchCounters`, not this — and only unit tests use it.
 
