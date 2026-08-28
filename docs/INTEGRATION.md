@@ -13,6 +13,13 @@
 > [`policy-paths.json`](fixtures/policy-paths.json), generated from
 > `policy/paths.ts` (`bun run scripts/emit-policy-asset.ts`) so a consumer in
 > another language classifies paths against this table instead of a second copy.
+>
+> **§4.5 is a second contract in this file and not the façade's**: `sense.v1`,
+> the watch wire types between the backend and the HUD (P5.1, 2026-08-27). It
+> lives here because §4 is where backend↔frontend message types have been
+> tabulated since P2, and because a HUD written without it re-invents the
+> delivery rule, which is the rule that keeps a trip from being read to the wrong
+> person.
 
 ## 1. Topology & lifecycle
 
@@ -349,6 +356,167 @@ Every narration instruction ends with an explicit *do not invent* clause. The
 persona is being told what happened, not asked what she thinks happened; the
 event stream is the only thing that knows the truth about a task.
 
+### 4.5 Watches — the `sense.v1` wire contract (P5.1, 2026-08-27)
+
+> Implemented in `backend/src/pipeline/senseBridge.js` (the process-wide bridge),
+> `src/gateway/websocket.js` (`WATCH_DISARM`) and `src/api/watches.js` +
+> `src/api/auth.js` (the REST control plane). The sidecar is
+> `backend/sidecar/sense/` on 127.0.0.1:8007, contract `sense.v1`; the plan is
+> `docs/VIGILANCE.md` beside the repos. This section exists because that was the
+> one thing P5.1 shipped without: five wire types and three routes with no
+> contract written down anywhere, and §4.2 has been the precedent for that since
+> P2. It is what a second HUD, or a second backend, would be written from.
+
+A **watch** is a standing observation: one sensor, sampled every period, which
+trips on a *transition* and never on the state of being down. It observes and
+never acts, so nothing in this section dispatches anything — a corrective action
+is an agent task and goes through §4.1/§4.2.
+
+#### Backend → frontend
+
+| WS `type` | Source | Delivery | Frontend behavior |
+| --- | --- | --- | --- |
+| `watch_armed` | `watch.armed`, the attach snapshot, every reconcile | broadcast | the row's identity: create it, or **merge** into it by `watchId` |
+| `watch_state` | `watch.tripped` / `watch.blind` / `watch.recovered`, the attach snapshot, every reconcile | broadcast | how it is going: merge into the same row |
+| `watch_tripped` | `watch.tripped` | **only the session that armed it** | the trip counter and the log line |
+| `watch_disarmed` | `watch.disarmed` | broadcast | the row is terminal; it leaves the screen after a linger |
+
+The payloads, in full. Nothing else is ever in them — no sampled value, no
+matched log line, no path, no host, no command (rule R3 of the plan, applied at
+the one seam where observed content could reach a screen or a voice):
+
+- `watch_armed { watchId, label, rung, sensorKind, tier, expiresAt }`. `rung` is
+  `R1`–`R6`; `sensorKind` is one of `proc|file|logmatch|gpu|port|unit`; `tier` is
+  `observe`, and only `observe`, for the whole of P5.1. `label` is the user's own
+  words, sanitised — it exists so she can *recognise* her watch when Hannah names
+  it, which is why it is kept rather than replaced by an id.
+- `watch_state { watchId, state, lastSampleAt, samplesOk, fires }`. `state` is
+  `armed|blind|suspended|expired|faulted|disarmed`. **`degraded` is not a state.**
+  It is one of the four counters in `GET /api/v1/health` and it means a watch
+  whose *action* tier was lowered, which cannot happen in an observe-only phase:
+  it is hard-coded to 0 on both sides and the field exists so the shape does not
+  change under P5.2. A HUD that renders a `degraded` pill is rendering something
+  that will not arrive.
+- `watch_tripped { watchId, label, at, confidence }`. `at` is the sidecar's
+  timestamp and not the delivery time, so a trip replayed three hours later still
+  says when it really happened. `confidence` is `deterministic|corroborated`
+  (everything armable in P5.1 is deterministic). It deliberately does **not**
+  carry `fires`: the HUD increments its own counter on this message and takes the
+  server's number from the next `watch_state`, because a counter that only moved
+  on the following sample would be lying about the one thing the pill exists to
+  show.
+- `watch_disarmed { watchId, reason }`, `reason` ∈ `user|expired|faulted|shutdown`.
+
+Four properties a second implementation has to keep, because each of them was a
+bug first:
+
+- **`watch_armed` and `watch_state` are idempotent, and they are re-sent.** They
+  are the same two messages whether they came from a sidecar event, from the
+  attach snapshot or from a reconcile — a row that looks different depending on
+  which road it arrived by is a bug nobody sees until the user reloads. Merge by
+  `watchId`, and drop absent keys from the patch: an appending reducer duplicates
+  rows on every reconnect, and a naive merge lets a `watch_state` (which carries
+  neither `label` nor `rung`) erase them.
+- **A trip goes to the session that armed the watch, or to a durable inbox. Never
+  to `sessions.at(-1)`.** The agent bridge's newest-session fallback is wrong
+  here and was a live leak until backend `fdb2f32`: A arms *"watch my training"*,
+  closes her tab, it trips, and B hears about it with A's label on it. When the
+  owner cannot hear it the trip is stored **with its owner id inside** and
+  replayed when *who can hear it* changes — exactly once, with its real
+  timestamp, and in different words when the owning conversation is gone for
+  good, words that do not tell the listener that they asked for it. "Can hear it"
+  is two questions, an open socket **and** a live conversation: a watch is silent
+  for hours by design, so the ordinary case is a session that expires with the
+  HUD still connected.
+- **Blindness is public; a trip is not.** After `SENSE_BLIND_MS` with no sample
+  the watch is `blind` and it is said out loud to whoever is connected, not only
+  to the owner: that nobody is watching is not a private fact, and a watch that
+  believes it is looking and is not is the worst failure this feature has.
+- **There is no per-sample event, and no heartbeat.** `sense.v1` publishes only
+  `watch.armed`, `tripped`, `blind`, `recovered`, `expired`, `faulted` and
+  `disarmed`. Four quiet hours and four blind hours look identical from outside,
+  which is why `lastSampleAt` and the counters are on `GET /api/v1/health` and
+  why `hannah doctor` prints a `vigilancia:` line at all.
+
+#### Frontend → backend
+
+`WATCH_DISARM { watchId }` — the only client-to-server watch message, and the
+HUD's only control-plane verb. It disarms; it cannot arm. The asymmetry is
+deliberate: disarming only ever *stops* her watching, so it can keep the
+backend's ordinary loopback posture (like `AGENT_APPROVAL`), while arming is the
+first thing in this system that runs with no human utterance and therefore lives
+behind the stricter guard below. Nothing is optimistic: the row changes when
+`watch_disarmed` comes back, not when the button is pressed.
+
+There is no `WATCH_ARM`. A watch is armed by voice — `resolveWatchIntent()` in
+`tools.js`, then a `[WATCH: …]` tag in the persona's own protocol, dispatched
+fire-and-forget from `orchestrator.js` in the byte-for-byte shape of `[TASK:]` —
+or over REST by something that is not a browser.
+
+#### The attach snapshot, in order
+
+The list a HUD sees on connect arrives over the socket, and the order is part of
+the contract:
+
+1. `attachSession` sends, for every non-terminal watch this process knows, one
+   `watch_armed` then one `watch_state`.
+2. **Then** a `reconcile()` against the sidecar's `GET /v1/watches` — after, and
+   not instead: that is a round trip and the HUD has to paint something now. It
+   is also necessary rather than belt-and-braces, because a healthy watch emits
+   no events at all and one that came back from a sidecar restart is born
+   `suspended`; a watch this backend never heard announced can only be learned by
+   asking, and a HUD connecting is the one moment somebody asks. Rows the
+   reconcile adopts are announced with the same two messages.
+3. Then the inbox flush — "this happened while you were away" — and then any
+   blindness that is *still true*, re-said to a session that arrives into it.
+   Blindness is not history; it is the current state.
+
+**Attaching gives no ownership.** The socket sees every watch in the process and
+adopts none of them; `attachSession` used to claim orphans and that was the quiet
+half of the `sessions.at(-1)` leak. The screen is shared, the voice is not.
+
+#### `/api/v1/watches` — deliberately the strictest guard in the backend
+
+| Route | Success |
+| --- | --- |
+| `GET /api/v1/watches` | `200 {watches:[…]}` — a hand-written field whitelist, so a new field on the sidecar's row (a path, a host, the line that matched) cannot leak through this route without somebody typing it |
+| `POST /api/v1/watches` | `{label, sensor:{kind, …fields by name}}` → `201 {watchId}` |
+| `DELETE /api/v1/watches/:id` | `200 {disarmed:true}` |
+
+All three sit behind `requireWatchAuth` (`src/api/auth.js`), **the only place in
+this backend that is stricter than its own default**. `authorize()` serves any
+loopback client with no token, and for the rest of the API that is fine because
+nothing moves unless a human says something. A watch does. So these routes
+require the UI token *even on loopback* — 401 without it — and answer **403 to
+any request carrying an `Origin` header**: a page open in a browser on this
+machine reaches 127.0.0.1:3001 with a simple request and no preflight, and the
+browser is the only client that sends `Origin` (Node's fetch does not). Same
+guard, word for word, as the agent façade and as :8007 itself.
+
+The consequence is intended, and is written here so nobody "fixes" it: **the HUD,
+being a browser, cannot use these routes.** It learns over the socket and disarms
+with `WATCH_DISARM`; these routes are for what is not a browser — the launcher
+and `hannah doctor`. A frontend that calls them gets a 403 on every single load,
+which is exactly what the settings panel did until frontend `fa8c276`, where the
+`catch` painted *"nothing is being watched"* — a screen asserting the one thing
+it had just failed to find out.
+
+Two more properties of the POST worth copying rather than re-deciding:
+
+- The spec is **rebuilt** from the sensor catalog in `tools.js`, never forwarded.
+  A command string has nowhere to land: sensors are typed specs with named
+  fields, and everything the sidecar executes goes through an argv list with
+  `shell=False`.
+- A watch armed over REST has **no session**, so whatever it trips goes to the
+  inbox until a HUD connects. Inventing a session for it would be choosing who to
+  talk to.
+
+Error codes: `400|403|404|409` pass the sidecar's `reason` string through
+verbatim — on a denied path that sentence is byte-for-byte the agent's own
+denial, and it is what the user has to hear — and everything else becomes
+`503 sense_unavailable`, because disabled and down are the same observable state
+and no code is invented for something that did not happen on the other side.
+
 ## 5. Interruption semantics (barge-in vs cancel)
 
 > Implemented (M2.4, 2026-08-21): barge-in in `gateway/websocket.js` aborts the
@@ -440,6 +608,13 @@ sequenceDiagram
 - `policy-asset.test.ts` holds `docs/fixtures/policy-paths.json` byte-identical
   to what `scripts/emit-policy-asset.ts` emits now, and re-decides every golden
   case in it — a denylist rule added without regenerating fails there.
+- Watches, §4.5 (P5.1): backend `tests/unit/senseBridge.test.js` (the delivery
+  rule, the inbox across a backend restart, blindness, the `(watchId, seq)`
+  dedupe) and `tests/unit/watchIntent.test.js` (the assembled `[WATCH:]`
+  vocabulary); frontend `tests/watchPill.test.js`, `watchesStore.test.js`,
+  `watchesPanel.test.js`; sidecar `backend/sidecar/sense/tests/` through
+  `npm run test:sense`, which is **not** chained to `npm test` because that venv
+  is created by hand and a missing one must not read as a red suite.
 - Backend side (P2): mock façade server (recorded SSE fixtures) so backend unit
   tests run with no engine — keeps backend's "works with sidecar down" rule.
 - A `docs/fixtures/` set of canonical event streams (JSONL) shared by both.
