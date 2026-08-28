@@ -868,11 +868,15 @@ Observe only. No screen, no remote, no action. The phase exists to prove she can
 
 **The phase was verified independently after it was called done, and it did not
 all hold.** The fixes are thirteen commits across the three repos (backend
-`fdb2f32`…`3be949f`, agent `7114f6d`, frontend `fa8c276`, `842016d`). Three of
-the defects were things that had already been *claimed*: this file's own
-session-binding rule, the describe block in `senseBridge.test.js` that said it
-proved it, and M5.1.5's accept line, which asks for a rendering test of a state
-that does not exist. Two were security defects — a trip narrated to a stranger,
+`fdb2f32`…`3be949f`, agent `7114f6d`, frontend `fa8c276`, `842016d`).
+**One claim was written in three places and was false in all three**: the
+delivery rule — a trip binds to the session that armed it, never to
+`sessions.at(-1)` — was asserted by backend `91c232c`'s commit message, by the
+`describe` title of the test meant to prove it, and by M5.1.4 below. The code did
+the opposite. Two acceptance lines did not hold either: M5.1.2's was true at arm
+time and false at sample time, and M5.1.5's asks for a rendering test of
+`degraded`, which is a health counter and not a state. Two of the defects were
+security defects — a trip narrated to a stranger,
 and a path denylist a symlink walked past — and those are in
 `workspace/AUDIT.md` as well, because that is where this project keeps them. Each
 milestone below carries its own correction, in the tense it happened.
