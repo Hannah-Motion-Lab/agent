@@ -4,7 +4,10 @@
 > #16–#21 added 2026-08-27 by P5.0/P5.1 (the watches — see ROADMAP Phase 5);
 > #18 closed the same day. #22 and #23 added 2026-08-27 by the **independent
 > verification of P5.1**, which found thirteen defects, three of them in claims
-> already made by a commit message, a test title or the roadmap.
+> already made by a commit message, a test title or the roadmap. #23 **rewritten**
+> 2026-08-28: what it described was closed by two further rounds of verification,
+> and what those rounds left is a different gap under the same number. #24–#26
+> added 2026-08-28 by round four, the last automated one.
 > Reviewed at every phase boundary; an entry leaves only when it is closed or
 > explicitly accepted.
 
@@ -40,7 +43,10 @@ where the work is knowingly incomplete.
 | [20](#20) | The trip inbox is in the backend, not the sidecar | Contract | ~1 d | A second backend, or a second HUD host |
 | [21](#21) | P5.1 shipped without ADR-0013 and without SECURITY T9–T12 | Nothing | ~3 h | Before P5.2 changes the façade contract |
 | [22](#22) | A watched path is still classified by name, not by inode | Design | ~1 d | If the policy model ever moves off paths |
-| [23](#23) | The backend ignores the sidecar's SSE `boot=` id | Nothing | ~2 h | Before a watchId can outlive a sidecar restart |
+| [23](#23) | The sidecar's event ring has no delivery ack; the replay filter is one file | Contract | ~1 d | A second consumer of `/v1/events`, or #20 |
+| [24](#24) | `senseBridge.snapshot()` exports the raw label and `sessionId`, uncalled | Nothing | ~15 m | Whoever puts watches into health or a broadcast |
+| [25](#25) | A refused `[WATCH:]` writes the watched path into the launcher log | Nothing | ~1 h | P5.2, or the first time that log is shared |
+| [26](#26) | An orphaned trip is never spoken to anybody | Product | ~1 d | P5.2 |
 
 ---
 
@@ -292,18 +298,29 @@ if that rig stops being debug-only.
 
 ---
 
-## The watches (P5.0 / P5.1, 2026-08-27)
+## The watches (P5.0 / P5.1, 2026-08-27 and 2026-08-28)
 
 Nothing here is a defect in what shipped. They are the edges the watch primitive
 was built up to and deliberately stopped at, plus one thing its own milestone
 asked for and did not get.
 
-The last two arrived differently and it is worth saying how: P5.1 was **verified
-independently after it was called done**, and the verification found thirteen
-defects — among them a trip narrated to a stranger and a denylist a symlink
-walked past. Those were fixed, not filed. #22 and #23 are what the fixes
-knowingly left open, written down at the moment they were understood rather than
-after somebody else trips over them, which is the whole point of this file.
+#22 onwards arrived differently and it is worth saying how: P5.1 was **verified
+independently after it was called done**, in three successive rounds, by people
+who had not built it. The first found thirteen defects — among them a trip
+narrated to a stranger and a path denylist a symlink walked past (backend
+`fdb2f32`…`3be949f`). The second found ten more, including a sidecar restart that
+passed in complete silence while the person went on believing she was being
+watched, and a trip that left the inbox before anyone knew it had been said
+(backend `1db1110`…`7bed4d9`, frontend `6f35661`, `fe62bd3`). The third found
+four, all of them inside the restart handling the second round had just added
+(backend `34f63ce`…`f460ee7`). All of them were fixed, not filed. What is filed
+here is what those fixes **knowingly left open**, written down at the moment it
+was understood rather than after somebody else trips over it, which is the whole
+point of this file.
+
+One entry, #23, has been rewritten rather than added to. What it described is
+closed; a different gap of the same family is what remains, and the entry says so
+in its own first paragraph instead of pretending it was always about that.
 
 ### 16
 **R0 is not implemented.** The cheapest and only *certain* rung — the exit code
@@ -542,31 +559,131 @@ can also read the file.
 first time a watch is armed on something a second user can link.
 
 ### 23
-**The backend ignores the `boot=` id the sidecar now sends.**
-`senseClient.subscribe()` keeps `lastId` for the life of the backend process and
-re-sends it as `Last-Event-ID` on every reconnect; the SSE comments — `sense.v1 connected`
-and `sense.resume from=… replayed=… truncated=… boot=…` — are parsed out and
-discarded, so the backend cannot tell a clean resume from a sidecar that
-restarted underneath it.
+**The sidecar's event ring has no delivery acknowledgement, so replay protection
+is the backend's own file and nothing else.**
 
-*Why it is not urgent.* The half that was dangerous is fixed: `since()` used to
-answer `truncated=false` to a cursor ahead of the ring and then filter everything
-behind it, so a `Last-Event-ID` of 500 against a freshly restarted sidecar meant
-an open connection, `onStatus` saying `up`, and nothing but keep-alives — deaf
-while reporting healthy, which is the exact failure the blindness contract exists
-to catch. Backend `1a231ff` makes an impossible cursor behave like a new
-connection (whole ring, `truncated=true`) and takes the watermark from the ring
-instead of the client. So the sidecar now fails safe on its own, and a restarted
-sidecar returns its watches as `suspended` and emits nothing for them until
-somebody re-arms (assumption A4: re-arming is not consent).
+*What this entry said until 2026-08-28, and it was false by then.* The title was
+"the backend ignores the `boot=` id the sidecar now sends" and the body said the
+SSE comments were parsed out and discarded, so the backend could not tell a clean
+resume from a restart. Both halves are closed, and so is the residual this entry
+named — a `watchId` reused across a boot losing its first events to the
+`(watchId, seq)` dedupe. `senseClient.subscribe()` reads `boot=` off the welcome
+comment, drops `lastId` when it changes and announces `onStatus('restarted')`
+(backend `1db1110`). The bridge decides in **one** place what a restart means for
+every row: `afterReboot()` sends each non-terminal row dark, says the blind line
+once per row whether or not a HUD is attached, sets `w.seq = 0` and prunes what
+the new boot no longer has (`bb672d1`). Recovery now means `armed` and not merely
+"not blind", so a `suspended` row no longer earns a *"ya la veo de nuevo"* it
+cannot back up (`34f63ce`). And the pair `(boot, cursor)` is persisted beside the
+inbox (`922333e`).
 
-*What is still wrong-shaped.* The bridge dedupes by `(watchId, seq)` and `seq`
-restarts at 1 with each sidecar boot, while the bridge's `w.seq` is per backend
-process. Today no event can hit that, because a watch that survived a restart is
-`suspended` and silent; the day a `watchId` is reused across a boot — a resumed
-watch, a re-arm that keeps the id — its first events would be dropped as
-duplicates, silently. Reading `boot=` and resetting `lastId` and every `w.seq`
-when it changes is the fix, and it is small.
+*What is actually left.* The ring is a resume buffer, not a queue with an
+acknowledgement. `EventBus.since()` cannot distinguish "I am new" from "replay me
+from the beginning", so a subscriber that arrives with no `Last-Event-ID` gets up
+to 2000 entries **as live events** — and every backend process arrives that way,
+because `lastId` starts null. The only thing that filters them is the
+`(boot, cursor)` pair the bridge keeps in `backend/data/watch-inbox.json`. That
+file is therefore load-bearing state and not a cache: delete it, corrupt it, or
+repoint `HANNAH_WATCH_INBOX_FILE`, and the whole ring is handled again from zero.
+What that looks like was measured before `922333e` fixed it: trips already spoken
+came back, watches disarmed hours earlier rewrote their raw label to disk, and
+with `INBOX_MAX` at 10 two restarts were enough to evict everything genuinely
+pending while shouting *"buzón lleno"* — the one alarm that has to mean a real
+trip was lost.
 
-*Trigger.* Before anything lets a `watchId` outlive a sidecar restart, which is
-P5.2's re-arm or P5.4's standing grants, whichever lands first.
+*Why it is not closed on the sidecar's side, written down so it is not
+re-litigated.* The question is not "is this a replay?" but "did **this** backend
+already handle it?", and :8007 has nothing to answer it with — it knows nothing
+about sessions, which is the delivery condition, which is the same reason the
+inbox lives in the backend (#20). The saved cursor is also deliberately **not**
+sent back as `Last-Event-ID`: `since()` treats only a cursor *ahead* of the ring
+as impossible, so a stale cursor of 30 against a new boot already at 50 would eat
+that boot's first 30 events in silence. Deliver too much and filter locally;
+delivering too little is unrecoverable and nobody finds out.
+
+*Approach.* An acknowledgement in the `sense.v1` contract — the backend says how
+far it got, the ring prunes behind it — which is the same piece of work as moving
+the inbox into the sidecar (#20).
+
+*Trigger.* A second consumer of `/v1/events`, the inbox moving to :8007, or the
+first time somebody clears `backend/data/` as if it were a cache.
+
+### 24
+**`senseBridge.snapshot()` hands out the raw label and the arming `sessionId`,
+and nothing calls it.**
+Every other exit a watch has was narrowed on 2026-08-28. `armedMsg()` builds a
+different envelope per recipient, so a HUD that did not arm the watch sees the
+row, its state and its sensor kind and **not** the words its owner dictated
+(`ce847d4`); the trip and the give-up notice go to the owning session or to the
+inbox, never to a broadcast (`422171f`, `7bed4d9`); the label reaches the model
+through `watchLabel()` on both of its roads (`680c1c6`, `8156c70`); and
+`api/watches.js` returns a hand-written whitelist. `snapshot()` is the exit that
+was not narrowed, because it has no production caller — `api/health.js` imports
+`watchCounters`, not this — and only unit tests use it.
+
+*Why it is written down rather than ignored.* It is `agentBridge.snapshot()`'s
+twin in name and shape, and that one **is** wired into `GET /api/v1/health`. The
+next person who wants a watch list in health, or in any broadcast, will reach for
+the symmetry and be handed `label` and `sessionId` raw — `ce847d4` re-opened by
+autocomplete, in the one file where that mistake has already been made twice.
+
+*Approach.* Delete it, or give it `armedMsg()`'s per-recipient shape at the same
+time as its first caller. Deleting is the honest option: the HUD's list already
+arrives through the attach snapshot on the socket.
+
+*Trigger.* Whoever puts watches into `/api/v1/health` or into a broadcast.
+
+### 25
+**The one place a `[WATCH:]` argument — which is a path — is still written down
+is the launcher's log.**
+`orchestrator.js`'s `refuseAction()` logs `{sessionId, tag, arg}` with the
+argument sliced to 120 characters, and for a refused `[WATCH:]` that argument is
+the **watched path**. `72d63bf` removed the other road for exactly this reason:
+the raw tag was reaching `memory.db` and the embedding index, and a `TASK`
+argument is a description while a `WATCH` argument is a filename. Winston has one
+transport here, the console, and the launcher runs the backend as
+`nohup node src/server.js >>"$LOG"`, so the line lands in
+`hannah-motion-lab/.hannah-launch.log`: an ordinary file at the workspace root,
+created with the default umask, on nobody's denylist — unlike `backend/data/`,
+which is on the agent's.
+
+*Why it is not simply a bug.* The line is deliberate and its reason is in the
+comment above it: a silent drop hides an injection attempt and a clumsy model
+equally, and this branch only fires in a narration turn, where the text that
+produced the tag was written by somebody else. A refusal is the event most worth
+keeping. What is wrong-shaped is the destination, not the record.
+
+*Approach.* Log the tag with a *shape* — sensor kind, argument length, whether it
+classified sensitive — instead of the argument itself; or keep the argument and
+give the launcher log the 0600 treatment `backend/data/` already gets, plus a
+denylist entry.
+
+*Trigger.* P5.2, which adds a second free-text argument to the same branch, or
+the first time somebody pastes that log into an issue.
+
+### 26
+**A trip whose owner never comes back is never said to anybody.**
+Not a defect: it is §10 of the plan applied without a hedge, and it was chosen
+over the alternative in backend `422171f`. A trip binds to the session that armed
+it; when that conversation is gone the trip is persisted and **not** read out to
+whoever happens to be connected. What it replaced was worse than it looked — a
+sentence that hedged the attribution is still one person's own words about their
+own work arriving in another person's ear.
+
+*The consequence, stated because otherwise a user discovers it.* Nothing ever
+speaks that trip. It stays in `watch-inbox.json`, counted in `pending` by
+`GET /api/v1/health`, which is what the launcher's `vigilancia:` line reads, and
+`orphaned()` writes one `warn` per trip — once, not once per attach. It is not
+counted in `stalled` either: `stalled` means the delivery ceiling was reached,
+and an orphan is never attempted, so its `attempts` stay at 0. So the only three
+ways to learn it happened are `hannah doctor`, the health route and that one log
+line. And because `INBOX_MAX` is 10 and eviction is oldest-first, a stuck orphan
+holds a slot and can be pushed out by newer trips — loudly, but pushed out.
+
+*Approach.* P5.2 has to answer this anyway, because a trip that can *act* cannot
+be allowed to fall silent: re-attach by an identity that outlives the session id,
+or the notification path §10 already names
+(`org.freedesktop.portal.Notification`, on the bus, no grant dialog), or a spoken
+line that names no label and asks the person to open the HUD.
+
+*Trigger.* P5.2, or the first *"she never told me it stopped"*.
